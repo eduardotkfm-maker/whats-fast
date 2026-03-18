@@ -28,14 +28,32 @@
           </div>
         </div>
         <div class="header-actions">
-          <!-- API responsability moved to backend -->
+          <!-- SELETOR DE MENTORIA PREMIUM -->
+          <div class="mentoria-selector">
+            <div class="mentoria-slider"></div>
+            <label class="mentoria-option">
+              <input type="radio" name="mentoria" value="cleiton" checked>
+              <span class="mentoria-btn">Mentoria Cleiton</span>
+            </label>
+            <label class="mentoria-option" style="right: 0;">
+              <input type="radio" name="mentoria" value="julia">
+              <span class="mentoria-btn">Mentoria Julia</span>
+            </label>
+          </div>
         </div>
       </div>
     </header>
 
     <!-- UPLOAD AREA -->
     <section class="upload-section" id="upload-section">
-      <div class="upload-zone" id="upload-zone">
+      <!-- Campo de Nicho -->
+      <div class="nicho-field" id="nicho-field">
+        <label for="nicho-input">Nicho do Mentorado</label>
+        <input type="text" id="nicho-input" placeholder="Ex: Dentista, Esteticista, Médica..." autocomplete="off">
+      </div>
+
+      <div class="file-upload-wrapper" id="drop-zone">
+        <input type="file" id="file-upload" accept=".zip" class="file-input" />
         <div class="upload-icon">
           <svg width="64" height="64" viewBox="0 0 64 64" fill="none">
             <path d="M32 8L32 44" stroke="currentColor" stroke-width="3" stroke-linecap="round"/>
@@ -54,6 +72,18 @@
       <div class="upload-summary" id="upload-summary"></div>
     </section>
 
+    <!-- DASHBOARD HISTÓRICO -->
+    <section class="history-section" id="history-section">
+      <div class="history-header">
+        <h2 class="section-title">📊 Histórico de Análises</h2>
+        <div class="history-actions">
+          <button class="btn btn-sm btn-outline" id="clear-history-btn" title="Limpar histórico">🗑️ Limpar</button>
+        </div>
+      </div>
+      <div id="history-dashboard"></div>
+    </section>
+
+
     <!-- PIPELINE VISUAL -->
     <section class="pipeline-section" id="pipeline-section">
       <h2 class="section-title">Pipeline de Processamento</h2>
@@ -64,7 +94,10 @@
           <div class="agent-header">
             <span class="agent-number">1</span>
             <div>
-              <h3>Transcribitor</h3>
+              <div style="display:flex; justify-content:space-between; align-items:center;">
+                <h3>Transcribitor</h3>
+                <button class="btn-rerun" id="rerun-agent1" title="Refazer apenas Agente 1 (incluindo seguintes)" style="display:none;">↻</button>
+              </div>
               <p class="agent-role">Controller A</p>
             </div>
           </div>
@@ -90,7 +123,10 @@
           <div class="agent-header">
             <span class="agent-number">2</span>
             <div>
-              <h3>Reconstrutor</h3>
+              <div style="display:flex; justify-content:space-between; align-items:center;">
+                <h3>Reconstrutor</h3>
+                <button class="btn-rerun" id="rerun-agent2" title="Refazer a partir do Agente 2" style="display:none;">↻</button>
+              </div>
               <p class="agent-role">Controller B</p>
             </div>
           </div>
@@ -116,7 +152,10 @@
           <div class="agent-header">
             <span class="agent-number">3</span>
             <div>
-              <h3>Analista</h3>
+              <div style="display:flex; justify-content:space-between; align-items:center;">
+                <h3>Analista</h3>
+                <button class="btn-rerun" id="rerun-agent3" title="Refazer apenas Agente 3" style="display:none;">↻</button>
+              </div>
               <p class="agent-role">Controller C</p>
             </div>
           </div>
@@ -198,6 +237,7 @@
         <div class="tab-header">
           <h3>🟩 Agente Analista — Output (Final View)</h3>
           <div class="export-btns">
+            <button class="btn btn-sm btn-outline" id="copy-agent3-txt" title="Copiar P&R (Texto)">📋 Copiar</button>
             <button class="btn btn-sm btn-outline" id="export-agent3-json">📥 JSON</button>
             <button class="btn btn-sm btn-outline" id="export-agent3-csv">📥 CSV</button>
           </div>
@@ -215,6 +255,12 @@
     <footer class="footer">
       <p>WhatsApp Conversation Analyzer — Pipeline MVC com 3 Agentes</p>
     </footer>
+  </div>
+
+  <!-- IMAGE MODAL -->
+  <div id="image-modal" class="image-modal">
+    <span class="close-modal" id="close-image-modal">&times;</span>
+    <img class="image-modal-content" id="expanded-img">
   </div>
 
   <script type="module" src="./main.js"></script>

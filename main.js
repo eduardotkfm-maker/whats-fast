@@ -10,12 +10,19 @@ import { executeAgent1 } from './modules/agent1-transcriber.js';
 import { executeAgent2 } from './modules/agent2-reconstructor.js';
 import { executeAgent3 } from './modules/agent3-analyst.js';
 import {
+  saveAnalysisToHistory,
+  getHistoryStats,
+  removeFromHistory,
+  clearHistory
+} from './modules/history.js';
+import {
   updateAgentStatus,
   updateAgentProgress,
   renderAgent1Results,
   renderAgent2Results,
   renderAgent3Results,
   renderUploadSummary,
+  renderHistoryDashboard,
   exportJSON,
   exportCSV,
   switchTab
@@ -28,7 +35,8 @@ let appState = {
   agent1Output: null,
   agent2Output: null,
   agent3Output: null,
-  isProcessing: false
+  isProcessing: false,
+  mentoriaType: 'cleiton' // Padrão
 };
 
 // ===== CACHE (localStorage) =====
@@ -82,6 +90,9 @@ const processBtn = document.getElementById('process-btn');
 const resetBtn = document.getElementById('reset-btn');
 const pipelineSection = document.getElementById('pipeline-section');
 const resultsSection = document.getElementById('results-section');
+const rerunBtn1 = document.getElementById('rerun-agent1');
+const rerunBtn2 = document.getElementById('rerun-agent2');
+const rerunBtn3 = document.getElementById('rerun-agent3');
 
 // ===== UPLOAD HANDLING =====
 
@@ -139,6 +150,11 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
   });
 });
 
+// Re-run buttons
+rerunBtn1?.addEventListener('click', (e) => { e.stopPropagation(); rerunAgent(1); });
+rerunBtn2?.addEventListener('click', (e) => { e.stopPropagation(); rerunAgent(2); });
+rerunBtn3?.addEventListener('click', (e) => { e.stopPropagation(); rerunAgent(3); });
+
 // Export buttons
 document.getElementById('export-agent1-json')?.addEventListener('click', () => {
   if (appState.agent1Output) exportJSON(appState.agent1Output, 'agent1-transcricoes');
@@ -157,6 +173,34 @@ document.getElementById('export-agent3-json')?.addEventListener('click', () => {
 });
 document.getElementById('export-agent3-csv')?.addEventListener('click', () => {
   if (appState.agent3Output) exportCSV(appState.agent3Output.qaList, 'agent3-perguntas-respostas');
+});
+
+// Botão de Copiar Texto (Agente 3)
+document.getElementById('copy-agent3-txt')?.addEventListener('click', async (e) => {
+  if (!appState.agent3Output || !appState.agent3Output.qaList) return;
+  
+  const btn = e.target;
+  const originalHtml = btn.innerHTML;
+  btn.innerHTML = '⏳ Copiando...';
+  
+  try {
+    let text = '--- PERGUNTAS E RESPOSTAS EXTRAÍDAS ---\n\n';
+    appState.agent3Output.qaList.forEach((qa, idx) => {
+      text += `[#${idx + 1}] ${qa.categoria.toUpperCase()}\n`;
+      text += `Data: ${qa.data_pergunta} ${qa.hora_pergunta} | Cliente: ${qa.remetente}\n`;
+      text += `PERGUNTA: ${qa.pergunta}\n`;
+      text += `RESPOSTA: ${qa.resposta}\n`;
+      text += `---------------------------------------------------\n\n`;
+    });
+    
+    await navigator.clipboard.writeText(text);
+    btn.innerHTML = '✅ Copiado!';
+  } catch (err) {
+    console.error('Erro ao copiar', err);
+    btn.innerHTML = '❌ Erro!';
+  }
+  
+  setTimeout(() => { btn.innerHTML = originalHtml; }, 2500);
 });
 
 // ===== FILE HANDLING =====
@@ -219,18 +263,21 @@ function restoreFromCache(cache) {
   updateAgentStatus(1, 'done', `${cache.agent1.length} transcrição(ões) [cache]`);
   updateAgentProgress(1, cache.agent1.length, cache.agent1.length);
   renderAgent1Results(cache.agent1);
+  if (rerunBtn1) rerunBtn1.style.display = 'block';
 
   // Agente 2
   appState.agent2Output = cache.agent2;
   updateAgentStatus(2, 'done', `${cache.agent2.length} mensagens unificadas [cache]`);
   updateAgentProgress(2, cache.agent2.length, cache.agent2.length);
-  renderAgent2Results(cache.agent2);
+  renderAgent2Results(cache.agent2, appState.parseResult ? appState.parseResult.mediaFiles : new Map());
+  if (rerunBtn2) rerunBtn2.style.display = 'block';
 
   // Agente 3
   appState.agent3Output = cache.agent3;
   const stats = cache.agent3.stats;
   updateAgentStatus(3, 'done', `${stats.totalPerguntas} P&R extraída(s) [cache]`);
-  renderAgent3Results(cache.agent3);
+  renderAgent3Results(cache.agent3, appState.parseResult ? appState.parseResult.mediaFiles : new Map(), appState.mentoriaType);
+  if (rerunBtn3) rerunBtn3.style.display = 'block';
 
   processBtn.innerHTML = '<span class="btn-icon-left">✅</span> Pipeline Concluída [Cache]';
   switchTab('tab-agent3');
@@ -246,6 +293,10 @@ async function runPipeline() {
   processBtn.innerHTML = '<span class="btn-icon-left">⏳</span> Processando...';
   resultsSection.style.display = 'block';
   resetBtn.style.display = 'inline-flex';
+
+  // Capturar mentoria selecionada no momento do início
+  const selectedMentoria = document.querySelector('input[name="mentoria"]:checked')?.value || 'cleiton';
+  appState.mentoriaType = selectedMentoria;
 
   const { messages, mediaFiles } = appState.parseResult;
 
@@ -302,7 +353,7 @@ async function runPipeline() {
       );
       
       updateAgentStatus(2, 'done', `${appState.agent2Output.length} mensagens unificadas`);
-      renderAgent2Results(appState.agent2Output);
+      renderAgent2Results(appState.agent2Output, mediaFiles);
       saveCache(appState.file, 'agent2', appState.agent2Output);
     } catch (error) {
       console.error('Erro no Agente 2:', error);
@@ -325,7 +376,7 @@ async function runPipeline() {
       
       const stats = appState.agent3Output.stats;
       updateAgentStatus(3, 'done', `${stats.totalPerguntas} P&R extraída(s)`);
-      renderAgent3Results(appState.agent3Output);
+      renderAgent3Results(appState.agent3Output, mediaFiles, appState.mentoriaType);
       saveCache(appState.file, 'agent3', appState.agent3Output);
     } catch (error) {
       console.error('Erro no Agente 3:', error);
@@ -335,12 +386,103 @@ async function runPipeline() {
     // Pipeline concluída
     processBtn.innerHTML = '<span class="btn-icon-left">✅</span> Pipeline Concluída';
     
+    // Salvar no histórico
+    const nichoInput = document.getElementById('nicho-input');
+    const nicho = nichoInput ? nichoInput.value.trim() : '';
+    if (appState.agent3Output) {
+      saveAnalysisToHistory({
+        mentoria: appState.mentoriaType,
+        filename: appState.file.name,
+        nicho,
+        agent3Output: appState.agent3Output
+      });
+      refreshHistoryDashboard();
+    }
+    
+    // Mostrar botões de refazer
+    if (rerunBtn1 && appState.agent1Output) rerunBtn1.style.display = 'block';
+    if (rerunBtn2 && appState.agent2Output) rerunBtn2.style.display = 'block';
+    if (rerunBtn3 && appState.agent3Output) rerunBtn3.style.display = 'block';
+
     // Auto-selecionar aba do Agente 3 (resultado final)
     switchTab('tab-agent3');
 
   } catch (error) {
     console.error('Erro na pipeline:', error);
     showError(`Erro na pipeline: ${error.message}`);
+  }
+
+  appState.isProcessing = false;
+}
+
+// ===== RE-RUN AGENTS =====
+
+async function rerunAgent(agentNumber) {
+  if (appState.isProcessing || !appState.parseResult) return;
+  
+  if (agentNumber > 1 && (!appState.agent1Output || appState.agent1Output.length === 0)) {
+    showError("Agente 1 incompleto.");
+    return;
+  }
+  if (agentNumber > 2 && (!appState.agent2Output || appState.agent2Output.length === 0)) {
+    showError("Agente 2 incompleto.");
+    return;
+  }
+
+  appState.isProcessing = true;
+  processBtn.disabled = true;
+  processBtn.innerHTML = '<span class="btn-icon-left">⏳</span> Processando...';
+  
+  const { messages, mediaFiles } = appState.parseResult;
+  let cache = loadCache(appState.file) || {};
+  const cacheKey = getCacheKey(appState.file);
+
+  try {
+    // Agent 1
+    if (agentNumber === 1) {
+      if (rerunBtn1) rerunBtn1.style.display = 'none';
+      updateAgentStatus(1, 'running', 'Transcrevendo áudios...');
+      switchTab('tab-agent1');
+      appState.agent1Output = await executeAgent1(messages, mediaFiles, (current, total, filename) => {
+        updateAgentProgress(1, current, total);
+        updateAgentStatus(1, 'running', `Transcrevendo: ${filename || '...'}`);
+      });
+      updateAgentStatus(1, 'done', `${appState.agent1Output.length} transcrição(ões)`);
+      renderAgent1Results(appState.agent1Output);
+      saveCache(appState.file, 'agent1', appState.agent1Output);
+      if (rerunBtn1) rerunBtn1.style.display = 'block';
+    }
+
+    // Agent 2
+    if (agentNumber <= 2) {
+      if (rerunBtn2) rerunBtn2.style.display = 'none';
+      if (agentNumber === 2) switchTab('tab-agent2');
+      updateAgentStatus(2, 'running', 'Reconstruindo conversa...');
+      appState.agent2Output = executeAgent2(messages, appState.agent1Output || [], mediaFiles, (current, total) => updateAgentProgress(2, current, total));
+      updateAgentStatus(2, 'done', `${appState.agent2Output.length} mensagens unificadas`);
+      renderAgent2Results(appState.agent2Output, mediaFiles);
+      saveCache(appState.file, 'agent2', appState.agent2Output);
+      if (rerunBtn2) rerunBtn2.style.display = 'block';
+    }
+
+    // Agent 3
+    if (agentNumber <= 3) {
+      if (rerunBtn3) rerunBtn3.style.display = 'none';
+      switchTab('tab-agent3');
+      updateAgentStatus(3, 'running', 'Extraindo perguntas e respostas...');
+      appState.agent3Output = executeAgent3(appState.agent2Output || [], (current, total) => updateAgentProgress(3, current, total));
+      const stats = appState.agent3Output.stats;
+      updateAgentStatus(3, 'done', `${stats.totalPerguntas} P&R extraída(s)`);
+      renderAgent3Results(appState.agent3Output, mediaFiles, appState.mentoriaType);
+      saveCache(appState.file, 'agent3', appState.agent3Output);
+      if (rerunBtn3) rerunBtn3.style.display = 'block';
+    }
+
+    processBtn.innerHTML = '<span class="btn-icon-left">✅</span> Refeito com Sucesso';
+    setTimeout(() => { processBtn.innerHTML = '<span class="btn-icon-left">✅</span> Pipeline Concluída'; }, 3000);
+  } catch (error) {
+    console.error('Erro ao refazer agente:', error);
+    showError(`Erro: ${error.message}`);
   }
 
   appState.isProcessing = false;
@@ -379,6 +521,9 @@ function resetApp() {
   processBtn.disabled = true;
   processBtn.innerHTML = '<span class="btn-icon-left">▶</span> Iniciar Pipeline';
   resetBtn.style.display = 'none';
+  if (rerunBtn1) rerunBtn1.style.display = 'none';
+  if (rerunBtn2) rerunBtn2.style.display = 'none';
+  if (rerunBtn3) rerunBtn3.style.display = 'none';
 
   // Hide results
   resultsSection.style.display = 'none';
@@ -432,3 +577,39 @@ function showError(message) {
     setTimeout(() => errDiv.remove(), 300);
   }, 5000);
 }
+
+// ===== HISTORY DASHBOARD =====
+
+function refreshHistoryDashboard() {
+  const selectedMentoria = document.querySelector('input[name="mentoria"]:checked')?.value || 'cleiton';
+  const stats = getHistoryStats(selectedMentoria);
+  renderHistoryDashboard(stats, selectedMentoria);
+}
+
+// Clear history button
+document.getElementById('clear-history-btn')?.addEventListener('click', () => {
+  if (confirm('Tem certeza que deseja limpar todo o histórico de análises?')) {
+    clearHistory();
+    refreshHistoryDashboard();
+  }
+});
+
+// Delete individual record from history dashboard
+document.getElementById('history-dashboard')?.addEventListener('delete-record', (e) => {
+  const id = e.detail?.id;
+  if (id) {
+    removeFromHistory(id);
+    refreshHistoryDashboard();
+  }
+});
+
+// Refresh history when switching mentoria
+document.querySelectorAll('input[name="mentoria"]').forEach(input => {
+  input.addEventListener('change', () => {
+    refreshHistoryDashboard();
+  });
+});
+
+// ===== INIT =====
+// Renderizar dashboard histórico na inicialização
+refreshHistoryDashboard();

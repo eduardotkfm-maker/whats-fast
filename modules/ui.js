@@ -124,7 +124,7 @@ export function renderAgent1Results(transcriptions) {
  * Renderiza os resultados do Agente 2 (Conversa Unificada)
  * @param {Array} conversation - Model de Conversa Unificada
  */
-export function renderAgent2Results(conversation) {
+export function renderAgent2Results(conversation, mediaFiles = new Map()) {
   const container = document.getElementById('agent2-results');
   if (!container) return;
 
@@ -183,6 +183,21 @@ export function renderAgent2Results(conversation) {
 
     // Montar conteúdo com transcrição se for áudio
     let contentHtml = escapeHtml(msg.conteudo);
+
+    // Se tiver arquivo de mídia (imagem), tentar carregar o Blob
+    if ((msg.tipo === 'imagem_comum' || msg.tipo === 'imagem_print') && msg.mediaFilename) {
+      const media = mediaFiles.get(msg.mediaFilename);
+      if (media && media.blob) {
+        const imageUrl = URL.createObjectURL(media.blob);
+        contentHtml = `
+          <div class="msg-image-container">
+            <img src="${imageUrl}" alt="Imagem do chat" class="chat-img" onclick="window.openImageModal('${imageUrl}')">
+          </div>
+          <div class="msg-media-label">${escapeHtml(msg.conteudo)}</div>
+        `;
+      }
+    }
+
     if (msg.tipo === 'audio' && msg.transcricao) {
       contentHtml += `<div class="msg-transcription"><em>Transcrição:</em> ${escapeHtml(msg.transcricao)}</div>`;
     }
@@ -210,12 +225,14 @@ export function renderAgent2Results(conversation) {
  * Cores por categoria
  */
 const CATEGORY_COLORS = {
-  'Arquétipo': '#a78bfa',
-  'Preço / Valor': '#34d399',
-  'Prazo / Agenda': '#fbbf24',
-  'Processo / Método': '#60a5fa',
-  'Material / Conteúdo': '#f472b6',
-  'Entrega / Resultado': '#fb923c',
+  'Marketing': '#f472b6',
+  'Comercial': '#34d399',
+  'Sucesso do Cliente': '#60a5fa',
+  'Mentalidade': '#fbbf24',
+  'Arquétipos / Branding': '#a78bfa',
+  'Produção de Conteúdo': '#fb923c',
+  'Contratação': '#2dd4bf',
+  'Acesso / Onboarding': '#cbd5e1',
   'Dúvidas Gerais': '#94a3b8'
 };
 
@@ -223,7 +240,7 @@ const CATEGORY_COLORS = {
  * Renderiza os resultados do Agente 3 (Perguntas e Respostas)
  * @param {Object} result - Output do Agente 3 { qaList, roles, stats, categorias }
  */
-export function renderAgent3Results(result) {
+export function renderAgent3Results(result, mediaFiles = new Map(), mentoriaType = 'cleiton') {
   const container = document.getElementById('agent3-results');
   if (!container) return;
 
@@ -242,13 +259,18 @@ export function renderAgent3Results(result) {
   // Header com stats
   let html = `
     <div class="results-header">
-      <h3>Perguntas & Respostas Extraidas</h3>
-      <div class="stats-row">
-        <span class="badge badge-question">${stats.totalPerguntas} pergunta(s)</span>
-        <span class="badge badge-answer">${stats.comResposta} com resposta</span>
-        <span class="badge badge-no-answer">${stats.semResposta} sem resposta</span>
+      <div style="display:flex; justify-content:space-between; align-items:center; width:100%;">
+        <h3>Perguntas & Respostas Extraídas</h3>
+        <div class="stats-row" style="margin-left: auto;">
+          <span class="badge badge-question">${stats.totalPerguntas} pergunta(s)</span>
+          <span class="badge badge-answer">${stats.comResposta} com resposta</span>
+          <span class="badge badge-no-answer">${stats.semResposta} sem resposta</span>
+        </div>
       </div>
     </div>
+    
+    <!-- Dashboard de Indicadores -->
+    ${renderAgent3Dashboard(categorias, mentoriaType)}
   `;
 
   // Sub-abas por categoria
@@ -281,11 +303,17 @@ export function renderAgent3Results(result) {
           ${qa.remetente ? `<span class="qa-sender">${escapeHtml(qa.remetente)}</span>` : ''}
         </div>
         <div class="qa-question">
-          <div class="qa-label">PERGUNTA</div>
+          <div class="qa-title-row">
+            <div class="qa-label">PERGUNTA</div>
+            ${renderMediaButtons(qa.mediaFilenames_pergunta, mediaFiles)}
+          </div>
           <div class="qa-text">${escapeHtml(qa.pergunta)}</div>
         </div>
         <div class="qa-answer ${noAnswer ? 'qa-answer-missing' : ''}">
-          <div class="qa-label">RESPOSTA</div>
+          <div class="qa-title-row">
+            <div class="qa-label">RESPOSTA</div>
+            ${renderMediaButtons(qa.mediaFilenames_resposta, mediaFiles)}
+          </div>
           <div class="qa-text">${escapeHtml(qa.resposta)}</div>
         </div>
       </div>
@@ -456,3 +484,240 @@ function getTypeClass(tipo) {
   };
   return classes[tipo] || 'msg-text';
 }
+
+/**
+ * Helper para renderizar botão de mídia dentro de um card de Q&A
+ */
+function renderMediaButtons(filenames, mediaFiles) {
+  if (!filenames || !filenames.length || !mediaFiles) return '';
+  
+  let html = '';
+  for (const filename of filenames) {
+    const media = mediaFiles.get(filename);
+    if (!media || !media.blob || media.type !== 'image') continue;
+    
+    const imageUrl = URL.createObjectURL(media.blob);
+    html += `
+      <button class="qa-image-btn" onclick="window.openImageModal('${imageUrl}')" title="Ver imagem anexada">
+        📷 Ver Imagem
+      </button>
+    `;
+  }
+  return html;
+}
+
+/**
+ * Renderiza o Dashboard de Indicadores (cards de métricas)
+ */
+function renderAgent3Dashboard(categorias, mentoriaType = 'cleiton') {
+  if (!categorias) return '';
+
+  const icons = {
+    'Marketing': '🎯',
+    'Comercial': '💰',
+    'Sucesso do Cliente': '⭐',
+    'Mentalidade': '🧠',
+    'Arquétipos / Branding': '✨',
+    'Produção de Conteúdo': '📱',
+    'Contratação': '👥',
+    'Acesso / Onboarding': '🔑'
+  };
+
+  // Pilares de cada mentoria
+  const cleitonPillars = ['Marketing', 'Comercial', 'Sucesso do Cliente', 'Mentalidade', 'Contratação'];
+  const juliaPillars = ['Arquétipos / Branding', 'Produção de Conteúdo', 'Acesso / Onboarding'];
+
+  // Determinar quais categorias mostrar
+  // 1. Mostrar os pilares da mentoria selecionada (se count > 0)
+  // 2. Mostrar outros pilares de mentorias cruzadas (se count > 0)
+  // 3. Manter a regra de não mostrar se o valor for 0
+  
+  const currentPillars = mentoriaType === 'julia' ? juliaPillars : cleitonPillars;
+  const otherPillars = mentoriaType === 'julia' ? cleitonPillars : juliaPillars;
+
+  // Filtrar e ordenar: primeiro os da mentoria atual, depois os outros
+  const activeCategories = [
+    ...currentPillars.filter(cat => (categorias[cat] || 0) > 0),
+    ...otherPillars.filter(cat => (categorias[cat] || 0) > 0)
+  ];
+
+  if (activeCategories.length === 0) return '';
+
+  let html = '<div class="qa-dashboard">';
+  
+  activeCategories.forEach(cat => {
+    const count = categorias[cat];
+    const icon = icons[cat] || '📋';
+    html += `
+      <div class="indicator-card">
+        <div class="indicator-icon">${icon}</div>
+        <div class="indicator-value">${count}</div>
+        <div class="indicator-label">${cat}</div>
+      </div>
+    `;
+  });
+
+  html += '</div>';
+  return html;
+}
+
+/**
+ * Renderiza o Dashboard Histórico de Análises
+ * @param {Object} stats - Estatísticas do getHistoryStats()
+ * @param {string} mentoriaLabel - Label da mentoria ativa
+ */
+export function renderHistoryDashboard(stats, mentoriaLabel = 'Todas') {
+  const container = document.getElementById('history-dashboard');
+  if (!container) return;
+
+  if (stats.totalMentorados === 0) {
+    container.innerHTML = `
+      <div class="history-empty">
+        <p>📊 Nenhuma análise registrada ainda.</p>
+        <p style="font-size: 0.8rem; margin-top: 0.5rem;">Processe uma conversa para começar a acumular dados aqui.</p>
+      </div>
+    `;
+    return;
+  }
+
+  let html = '';
+
+  // === Cards de Resumo ===
+  html += `
+    <div class="history-stats-grid">
+      <div class="history-stat-card">
+        <div class="history-stat-value">${stats.totalMentorados}</div>
+        <div class="history-stat-label">Mentorados Analisados</div>
+      </div>
+      <div class="history-stat-card">
+        <div class="history-stat-value">${stats.totalDuvidas}</div>
+        <div class="history-stat-label">Total de Dúvidas</div>
+      </div>
+    </div>
+  `;
+
+  // === Dúvidas por Nicho ===
+  const nichoEntries = Object.entries(stats.duvidaPorNicho)
+    .sort((a, b) => b[1] - a[1]);
+
+  if (nichoEntries.length > 0) {
+    html += `
+      <div class="history-nicho-section">
+        <h3>Dúvidas por Nicho</h3>
+        <div class="history-nicho-list">
+    `;
+
+    for (const [nicho, count] of nichoEntries) {
+      html += `
+        <div class="history-nicho-item">
+          <span class="history-nicho-name">${escapeHtml(nicho)}</span>
+          <span class="history-nicho-count">${count} dúvida${count !== 1 ? 's' : ''} mensal</span>
+        </div>
+      `;
+    }
+
+    html += '</div></div>';
+  }
+
+  // === Dúvidas por Mês ===
+  const monthEntries = Object.entries(stats.duvidaPorMes)
+    .sort((a, b) => {
+      const [ma, ya] = a[0].split('/');
+      const [mb, yb] = b[0].split('/');
+      return (yb + mb).localeCompare(ya + ma);
+    });
+
+  if (monthEntries.length > 0) {
+    html += `
+      <div class="history-monthly-section">
+        <h3>Dúvidas por Mês</h3>
+        <div class="history-monthly-grid">
+    `;
+
+    const meses = {
+      '01': 'Jan', '02': 'Fev', '03': 'Mar', '04': 'Abr',
+      '05': 'Mai', '06': 'Jun', '07': 'Jul', '08': 'Ago',
+      '09': 'Set', '10': 'Out', '11': 'Nov', '12': 'Dez'
+    };
+
+    for (const [mesAno, count] of monthEntries) {
+      const [mes, ano] = mesAno.split('/');
+      const mesLabel = meses[mes] || mes;
+      html += `
+        <div class="history-month-card">
+          <div class="history-month-value">${count}</div>
+          <div class="history-month-label">${mesLabel}/${ano}</div>
+        </div>
+      `;
+    }
+
+    html += '</div></div>';
+  }
+
+  // === Lista de Registros ===
+  if (stats.registros.length > 0) {
+    html += `
+      <div class="history-records-section">
+        <h3>Registros Individuais</h3>
+    `;
+
+    for (const rec of stats.registros.slice().reverse()) {
+      html += `
+        <div class="history-record" data-id="${rec.id}">
+          <span class="history-record-name">${escapeHtml(rec.mentorado)}</span>
+          <span class="history-record-nicho">${escapeHtml(rec.nicho)}</span>
+          <span class="history-record-date">${rec.dataAnalise}</span>
+          <span class="history-record-count">${rec.totalDuvidas} dúvida${rec.totalDuvidas !== 1 ? 's' : ''}</span>
+          <button class="history-record-delete" title="Remover" data-delete-id="${rec.id}">✕</button>
+        </div>
+      `;
+    }
+
+    html += '</div>';
+  }
+
+  container.innerHTML = html;
+
+  // Event listeners para deletar registros
+  container.querySelectorAll('.history-record-delete').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const id = btn.dataset.deleteId;
+      if (id) {
+        // Dispatch custom event to be handled by main.js
+        container.dispatchEvent(new CustomEvent('delete-record', { detail: { id } }));
+      }
+    });
+  });
+}
+
+// ===== IMAGE MODAL HANDLING =====
+document.addEventListener('DOMContentLoaded', () => {
+  const imageModal = document.getElementById('image-modal');
+  const modalImg = document.getElementById('expanded-img');
+  const closeModalBtn = document.getElementById('close-image-modal');
+
+  // Adicionando evento de fechamento no botão X
+  if (closeModalBtn && imageModal) {
+    closeModalBtn.addEventListener('click', () => {
+      imageModal.classList.remove('visible');
+    });
+  }
+
+  // Fechar ao clicar fora da imagem
+  if (imageModal) {
+    imageModal.addEventListener('click', (e) => {
+      if (e.target === imageModal) {
+        imageModal.classList.remove('visible');
+      }
+    });
+  }
+
+  // Expor a função globalmente para usar via onclick no HTML renderizado
+  window.openImageModal = function(src) {
+    if (imageModal && modalImg) {
+      modalImg.src = src;
+      imageModal.classList.add('visible');
+    }
+  };
+});

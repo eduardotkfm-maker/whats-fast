@@ -10,7 +10,6 @@
  * - Agrupar mensagens consecutivas do mesmo remetente
  * - Associar resposta correta
  * - Categorizar automaticamente por tema
- *
  * REGRAS:
  * - Proibido alterar texto
  * - Proibido resumir
@@ -91,33 +90,37 @@ function isRelevantQuestion(text) {
 // ===== AUTO-DETECÇÃO DE CATEGORIAS =====
 
 const CATEGORY_KEYWORDS = {
-  'Arquétipo': [
-    'arqu[eé]tipo', 'perfil', 'personalidade', 'tipo de',
-    'estilo', 'identidade', 'essência', 'ess[eê]ncia'
+  'Marketing': [
+    'anúncio', 'tráfego', 'audiência', 'persona', 'marketing', 'postagem',
+    'campanha', 'ads', 'público', 'engajamento', 'seguidor'
   ],
-  'Preço / Valor': [
-    'pre[çc]o', 'valor', 'custo', 'investimento', 'parcela',
-    'pagamento', 'pix', 'boleto', 'cart[aã]o', 'desconto',
-    'promocao', 'promoção', 'quanto custa', 'quanto [eé]'
+  'Comercial': [
+    'proposta', 'venda', 'preço', 'contrato', 'fechamento', 'comercial',
+    'vender', 'pagamento', 'pix', 'boleto', 'cartão', 'desconto', 'objeção'
   ],
-  'Prazo / Agenda': [
-    'prazo', 'quando', 'data', 'hor[aá]rio', 'agenda',
-    'dispon[ií]vel', 'vaga', 'início', 'começa', 'dura[çc][aã]o',
-    'quanto tempo', 'previs[aã]o'
+  'Sucesso do Cliente': [
+    'suporte', 'ajuda', 'problema', 'erro', 'não consigo', 'dúvida',
+    'fidelização', 'retorno', 'acompanhamento', 'resultado'
   ],
-  'Processo / Método': [
-    'como funciona', 'processo', 'etapa', 'm[eé]todo', 'passo',
-    'procedimento', 'funciona', 'como [eé]', 'como que',
-    'o que acontece', 'fluxo', 'dinâmica'
+  'Mentalidade': [
+    'mindset', 'pensamento', 'trava', 'crença', 'mentalidade', 'bloqueio',
+    'medo', 'insegurança', 'procrastinação', 'foco', 'motivação'
   ],
-  'Material / Conteúdo': [
-    'material', 'conte[uú]do', 'apostila', 'pdf', 'link',
-    'acesso', 'plataforma', 'módulo', 'aula', 'v[ií]deo',
-    'planilha', 'template', 'modelo', 'exemplo'
+  'Arquétipos / Branding': [
+    'arquétipo', 'identidade visual', 'marca', 'feed', 'estética', 'foto',
+    'fotografia', 'paleta', 'cores', 'logo', 'posicionamento'
   ],
-  'Entrega / Resultado': [
-    'entrega', 'resultado', 'receb', 'enviar', 'mandar',
-    'entreg', 'feedback', 'retorno', 'devolutiva'
+  'Produção de Conteúdo': [
+    'conteúdo', 'post', 'vídeo', 'reels', 'carrossel', 'produção',
+    'roteiro', 'linha editorial', 'ideia', 'copys', 'gravação'
+  ],
+  'Contratação': [
+    'equipe', 'vaga', 'contratar', 'freelancer', 'serviço', 'colaborador',
+    'recrutamento', 'delegar', 'seleção'
+  ],
+  'Acesso / Onboarding': [
+    'login', 'plataforma', 'senha', 'onboarding', 'call', 'acesso', 'link',
+    'hotmart', 'entrar', 'boas vindas'
   ]
 };
 
@@ -150,7 +153,8 @@ function groupConsecutiveMessages(messages) {
   const grouped = [];
   let current = {
     ...messages[0],
-    textos_agrupados: [messages[0].textoAnalise || messages[0].conteudo]
+    textos_agrupados: [messages[0].textoAnalise || messages[0].conteudo],
+    medias_agrupadas: messages[0].mediaFilename ? [messages[0].mediaFilename] : []
   };
 
   for (let i = 1; i < messages.length; i++) {
@@ -158,19 +162,27 @@ function groupConsecutiveMessages(messages) {
 
     if (msg.remetente === current.remetente) {
       current.textos_agrupados.push(msg.textoAnalise || msg.conteudo);
+      if (msg.mediaFilename) {
+        current.medias_agrupadas.push(msg.mediaFilename);
+      }
     } else {
       current.textoAnalise = current.textos_agrupados.join('\n');
+      current.mediaFilenames = [...current.medias_agrupadas];
       delete current.textos_agrupados;
+      delete current.medias_agrupadas;
       grouped.push(current);
       current = {
         ...msg,
-        textos_agrupados: [msg.textoAnalise || msg.conteudo]
+        textos_agrupados: [msg.textoAnalise || msg.conteudo],
+        medias_agrupadas: msg.mediaFilename ? [msg.mediaFilename] : []
       };
     }
   }
 
   current.textoAnalise = current.textos_agrupados.join('\n');
+  current.mediaFilenames = [...current.medias_agrupadas];
   delete current.textos_agrupados;
+  delete current.medias_agrupadas;
   grouped.push(current);
 
   return grouped;
@@ -214,6 +226,9 @@ export function executeAgent3(conversation, onProgress = () => {}) {
 
   // Identificar participantes
   const participants = [...new Set(grouped.map(m => m.remetente))];
+  
+  // Heurística de Atendimento: O cliente normalmente é o primeiro a mandar mensagem (inbound)
+  const clientName = participants.length > 0 ? participants[0] : null;
 
   const qaList = [];
 
@@ -223,6 +238,10 @@ export function executeAgent3(conversation, onProgress = () => {}) {
     }
 
     const msg = grouped[i];
+    
+    // REGRA: Apenas analisar mensagens do Cliente como "Perguntas"
+    if (clientName && msg.remetente !== clientName) continue;
+
     const textoAnalise = msg.textoAnalise || msg.conteudo;
 
     // Ignorar small talk
@@ -250,6 +269,15 @@ export function executeAgent3(conversation, onProgress = () => {}) {
       break;
     }
 
+    // Buscar mediaFilenames da resposta
+    let mediaFilenamesResposta = [];
+    for (let j = i + 1; j < grouped.length; j++) {
+      if (grouped[j].remetente !== msg.remetente && !isSmallTalk(grouped[j].textoAnalise || grouped[j].conteudo)) {
+        mediaFilenamesResposta = grouped[j].mediaFilenames || [];
+        break;
+      }
+    }
+
     // Detectar categoria
     const categoria = detectCategory(textoAnalise);
 
@@ -259,7 +287,9 @@ export function executeAgent3(conversation, onProgress = () => {}) {
       hora_pergunta: msg.hora,
       remetente: msg.remetente,
       pergunta: textoAnalise,
+      mediaFilenames_pergunta: msg.mediaFilenames || [],
       resposta: resposta || '[Sem resposta identificada]',
+      mediaFilenames_resposta: mediaFilenamesResposta,
       categoria
     });
   }

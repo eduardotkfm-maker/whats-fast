@@ -13,7 +13,13 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
-dotenv.config();
+const result = dotenv.config();
+if (result.error) {
+  console.error('❌ Erro ao carregar .env:', result.error);
+} else {
+  console.log('✅ Arquivo .env carregado com sucesso.');
+  console.log('📝 Variáveis carregadas:', Object.keys(result.parsed || {}));
+}
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -66,6 +72,12 @@ app.post('/api/transcribe', async (req, res) => {
   }
 
   const apiKey = req.headers['x-api-key'] || process.env.OPENAI_API_KEY;
+  console.log('🔑 Verificando API Key para requisição...');
+  if (apiKey) {
+    console.log(`✅ API Key detectada (Início: ${apiKey.substring(0, 7)}...)`);
+  } else {
+    console.log('❌ API Key NÃO detectada na requisição ou no ambiente.');
+  }
 
   if (!apiKey) {
     return res.status(400).json({
