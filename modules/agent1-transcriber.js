@@ -16,11 +16,10 @@
  * - Deve garantir estrutura consistente
  */
 
-// URL do backend
-const BACKEND_URL = 'http://localhost:3001';
+import { supabase } from './supabase.js';
 
 /**
- * Transcreve um arquivo de áudio via backend (que proxeia para Whisper API)
+ * Transcreve um arquivo de áudio via Supabase Edge Function (que proxeia para Whisper API)
  * @param {Blob} audioBlob - Arquivo de áudio
  * @param {string} filename - Nome do arquivo
  * @returns {string} Texto transcrito ou mensagem de erro
@@ -45,24 +44,23 @@ async function transcribeAudio(audioBlob, filename) {
     
     formData.append('file', file);
 
-    const response = await fetch(`${BACKEND_URL}/api/transcribe`, {
-      method: 'POST',
-      body: formData
+    const { data, error } = await supabase.functions.invoke('transcribe', {
+      body: formData,
     });
 
-    const data = await response.json();
-
-    if (!response.ok) {
-      return data.transcription || `[ERRO: ${data.error || response.statusText}]`;
+    if (error) {
+      console.error("Erro chamando Edge Function:", error);
+      return `[ERRO Edge Function: ${error.message}]`;
     }
 
-    return data.transcription.trim();
+    if (data && data.error) {
+      return data.transcription || `[ERRO Whisper: ${data.error}]`;
+    }
+
+    return data.transcription ? data.transcription.trim() : '[ERRO: Retorno Vazio]';
   } catch (error) {
     console.error(`Erro ao transcrever ${filename}:`, error);
-    if (error.message.includes('Failed to fetch') || error.message.includes('NetworkError')) {
-      return '[ERRO: Backend não está rodando. Execute: npm run server]';
-    }
-    return '[ERRO: Áudio Inaudível]';
+    return '[ERRO: Áudio Inaudível ou Falha na Rede]';
   }
 }
 

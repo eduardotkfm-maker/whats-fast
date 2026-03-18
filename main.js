@@ -390,13 +390,13 @@ async function runPipeline() {
     const nichoInput = document.getElementById('nicho-input');
     const nicho = nichoInput ? nichoInput.value.trim() : '';
     if (appState.agent3Output) {
-      saveAnalysisToHistory({
+      await saveAnalysisToHistory({
         mentoria: appState.mentoriaType,
         filename: appState.file.name,
         nicho,
         agent3Output: appState.agent3Output
       });
-      refreshHistoryDashboard();
+      await refreshHistoryDashboard();
     }
     
     // Mostrar botões de refazer
@@ -580,26 +580,26 @@ function showError(message) {
 
 // ===== HISTORY DASHBOARD =====
 
-function refreshHistoryDashboard() {
+async function refreshHistoryDashboard() {
   const selectedMentoria = document.querySelector('input[name="mentoria"]:checked')?.value || 'cleiton';
-  const stats = getHistoryStats(selectedMentoria);
+  const stats = await getHistoryStats(selectedMentoria);
   renderHistoryDashboard(stats, selectedMentoria);
 }
 
 // Clear history button
-document.getElementById('clear-history-btn')?.addEventListener('click', () => {
-  if (confirm('Tem certeza que deseja limpar todo o histórico de análises?')) {
-    clearHistory();
-    refreshHistoryDashboard();
+document.getElementById('clear-history-btn')?.addEventListener('click', async () => {
+  if (confirm('Tem certeza que deseja limpar todo o histórico de análises no Supabase?')) {
+    await clearHistory();
+    await refreshHistoryDashboard();
   }
 });
 
 // Delete individual record from history dashboard
-document.getElementById('history-dashboard')?.addEventListener('delete-record', (e) => {
+document.getElementById('history-dashboard')?.addEventListener('delete-record', async (e) => {
   const id = e.detail?.id;
   if (id) {
-    removeFromHistory(id);
-    refreshHistoryDashboard();
+    await removeFromHistory(id);
+    await refreshHistoryDashboard();
   }
 });
 
@@ -611,5 +611,5 @@ document.querySelectorAll('input[name="mentoria"]').forEach(input => {
 });
 
 // ===== INIT =====
-// Renderizar dashboard histórico na inicialização
-refreshHistoryDashboard();
+// Renderizar dashboard histórico na inicialização (Supabase)
+refreshHistoryDashboard().catch(console.error);
