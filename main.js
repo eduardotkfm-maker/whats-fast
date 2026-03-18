@@ -84,7 +84,7 @@ function clearAllCache() {
 }
 
 // ===== DOM ELEMENTS =====
-const uploadZone = document.getElementById('upload-zone');
+const uploadZone = document.getElementById('drop-zone');
 const fileInput = document.getElementById('file-input');
 const processBtn = document.getElementById('process-btn');
 const resetBtn = document.getElementById('reset-btn');
@@ -93,6 +93,8 @@ const resultsSection = document.getElementById('results-section');
 const rerunBtn1 = document.getElementById('rerun-agent1');
 const rerunBtn2 = document.getElementById('rerun-agent2');
 const rerunBtn3 = document.getElementById('rerun-agent3');
+const cacheSelector = document.getElementById('cache-selector');
+const loadCacheBtn = document.getElementById('load-cache-btn');
 
 // ===== UPLOAD HANDLING =====
 
@@ -149,6 +151,37 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
     switchTab(btn.dataset.tab);
   });
 });
+
+// Cache Selector handling
+if (cacheSelector && loadCacheBtn) {
+  cacheSelector.addEventListener('change', (e) => {
+    loadCacheBtn.disabled = !e.target.value;
+  });
+  
+  loadCacheBtn.addEventListener('click', () => {
+    const key = cacheSelector.value;
+    if (!key) return;
+    
+    try {
+      const cache = JSON.parse(localStorage.getItem(key));
+      if (cache) {
+        // Simular um arquivo virtual para satisfazer appState
+        appState.file = { name: cache._filename, size: 0 }; 
+        appState.parseResult = { messages: [], mediaFiles: new Map() }; // mock
+        
+        uploadZone.classList.add('has-file');
+        uploadZone.querySelector('h2').textContent = cache._filename;
+        uploadZone.querySelector('p').innerHTML = `<strong>Cache Restaurado</strong>`;
+        
+        processBtn.disabled = false;
+        restoreFromCache(cache);
+      }
+    } catch(e) {
+      console.error(e);
+      showError("Erro ao carregar cache selecionado");
+    }
+  });
+}
 
 // Re-run buttons
 rerunBtn1?.addEventListener('click', (e) => { e.stopPropagation(); rerunAgent(1); });
@@ -611,5 +644,41 @@ document.querySelectorAll('input[name="mentoria"]').forEach(input => {
 });
 
 // ===== INIT =====
+
+function populateCacheSelector() {
+  if (!cacheSelector) return;
+  
+  const caches = [];
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i);
+    if (key.startsWith(CACHE_PREFIX) && key !== 'whatsfast_history') {
+      try {
+        const data = JSON.parse(localStorage.getItem(key));
+        if (data._filename && data._timestamp) {
+          caches.push({ key, filename: data._filename, timestamp: data._timestamp });
+        }
+      } catch(e) {}
+    }
+  }
+  
+  caches.sort((a,b) => b.timestamp - a.timestamp);
+  
+  while (cacheSelector.options.length > 1) {
+    cacheSelector.remove(1);
+  }
+  
+  caches.forEach(c => {
+    const date = new Date(c.timestamp);
+    const dateStr = date.toLocaleDateString('pt-BR');
+    const timeStr = date.toLocaleTimeString('pt-BR');
+    
+    const option = document.createElement('option');
+    option.value = c.key;
+    option.textContent = `Cache encontrado para: ${c.filename} (salvo em ${dateStr}, ${timeStr})`;
+    cacheSelector.appendChild(option);
+  });
+}
+
 // Renderizar dashboard histórico na inicialização (Supabase)
 refreshHistoryDashboard().catch(console.error);
+populateCacheSelector();

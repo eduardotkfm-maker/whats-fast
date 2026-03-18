@@ -46,6 +46,17 @@
 
     <!-- UPLOAD AREA -->
     <section class="upload-section" id="upload-section">
+      <!-- Seletor de Cache -->
+      <div class="cache-selector-container" id="cache-selector-container" style="margin-bottom: 2rem; background: var(--bg-card); padding: 1.5rem; border-radius: 12px; border: 1px solid var(--border-color); text-align: left;">
+        <label for="cache-selector" style="display: block; margin-bottom: 0.5rem; font-weight: 600; color: var(--text-color);">🗂️ Recarregar análise do arquivo</label>
+        <div style="display: flex; gap: 10px;">
+          <select id="cache-selector" class="form-select" style="flex: 1; padding: 0.75rem; border-radius: 8px; border: 1px solid var(--border-color); background: var(--bg-main); color: var(--text-color); font-family: inherit;">
+            <option value="">-- Selecione um histórico (Cache) --</option>
+          </select>
+          <button class="btn btn-primary" id="load-cache-btn" disabled>Carregar</button>
+        </div>
+      </div>
+
       <!-- Campo de Nicho -->
       <div class="nicho-field" id="nicho-field">
         <label for="nicho-input">Nicho do Mentorado</label>
