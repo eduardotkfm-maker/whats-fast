@@ -21,7 +21,7 @@ export async function getHistory() {
     if (error) throw error;
     return data || [];
   } catch (e) {
-    console.warn('Erro ao ler histórico do Supabase:', e.message);
+    console.error('❌ Erro ao ler histórico do Supabase (analises):', e);
     return [];
   }
 }
@@ -174,6 +174,60 @@ export async function getHistoryStats(mentoria) {
 }
 
 /**
+ * Retorna análises detalhadas (Nicho -> Mês -> Categoria)
+ * @param {string} [mentoria]
+ */
+export async function getDetailedAnalytics(mentoria) {
+  try {
+    // Buscar todas as P&R com dados do nicho da análise pai
+    let query = supabase
+      .from('perguntas_respostas')
+      .select(`
+        categoria,
+        data_pergunta,
+        analises (
+          nicho,
+          mentoria
+        )
+      `);
+
+    const { data, error } = await query;
+    if (error) throw error;
+
+    // Filtrar por mentoria se solicitado
+    let filteredData = data;
+    if (mentoria) {
+      filteredData = data.filter(item => item.analises && item.analises.mentoria === mentoria);
+    }
+
+    // Agrupar: Nicho -> Mês -> Categoria -> Contagem
+    const tree = {};
+
+    for (const item of filteredData) {
+      if (!item.analises) continue;
+      const nicho = item.analises.nicho || 'Não informado';
+      const dataStr = item.data_pergunta || 'sem data';
+      
+      // Extrair Mês/Ano (esperado DD/MM/YYYY)
+      const parts = dataStr.split('/');
+      const mesAno = parts.length >= 3 ? `${parts[1]}/${parts[2]}` : 'Sem data';
+      const cat = item.categoria || 'Dúvidas Gerais';
+
+      if (!tree[nicho]) tree[nicho] = {};
+      if (!tree[nicho][mesAno]) tree[nicho][mesAno] = { total: 0, categorias: {} };
+      
+      tree[nicho][mesAno].total++;
+      tree[nicho][mesAno].categorias[cat] = (tree[nicho][mesAno].categorias[cat] || 0) + 1;
+    }
+
+    return tree;
+  } catch (e) {
+    console.error('❌ Erro ao buscar análises detalhadas (analytics):', e);
+    return {};
+  }
+}
+
+/**
  * Remove um registro do histórico pelo ID
  */
 export async function removeFromHistory(id) {
@@ -184,7 +238,7 @@ export async function removeFromHistory(id) {
       .eq('id', id);
     if (error) throw error;
   } catch (e) {
-    console.error('Erro ao deletar do Supabase:', e.message);
+    console.error('❌ Erro ao deletar registro do Supabase:', e);
   }
 }
 
@@ -200,6 +254,6 @@ export async function clearHistory() {
       .neq('id', '00000000-0000-0000-0000-000000000000'); // hack para delete all no supabase via client
     if (error) throw error;
   } catch (e) {
-    console.error('Erro ao limpar Supabase:', e.message);
+    console.error('❌ Erro ao limpar histórico do Supabase:', e);
   }
 }

@@ -10,10 +10,11 @@ import { executeAgent1 } from './modules/agent1-transcriber.js';
 import { executeAgent2 } from './modules/agent2-reconstructor.js';
 import { executeAgent3 } from './modules/agent3-analyst.js';
 import {
-  saveAnalysisToHistory,
   getHistoryStats,
+  getDetailedAnalytics,
   removeFromHistory,
-  clearHistory
+  clearHistory,
+  saveAnalysisToHistory
 } from './modules/history.js';
 import {
   updateAgentStatus,
@@ -39,49 +40,7 @@ let appState = {
   mentoriaType: 'cleiton' // Padrão
 };
 
-// ===== CACHE (localStorage) =====
-const CACHE_PREFIX = 'whatsfast_';
-
-function getCacheKey(file) {
-  return `${CACHE_PREFIX}${file.name}_${file.size}`;
-}
-
-function saveCache(file, stage, data) {
-  try {
-    const key = getCacheKey(file);
-    const cache = JSON.parse(localStorage.getItem(key) || '{}');
-    cache[stage] = data;
-    cache._filename = file.name;
-    cache._timestamp = Date.now();
-    localStorage.setItem(key, JSON.stringify(cache));
-    console.log(`Cache salvo: ${stage} (${file.name})`);
-  } catch (e) {
-    console.warn('Erro ao salvar cache:', e.message);
-  }
-}
-
-function loadCache(file) {
-  try {
-    const key = getCacheKey(file);
-    const raw = localStorage.getItem(key);
-    if (!raw) return null;
-    const cache = JSON.parse(raw);
-    console.log(`Cache encontrado para: ${file.name} (salvo em ${new Date(cache._timestamp).toLocaleString()})`);
-    return cache;
-  } catch (e) {
-    return null;
-  }
-}
-
-function clearAllCache() {
-  const keys = [];
-  for (let i = 0; i < localStorage.length; i++) {
-    const key = localStorage.key(i);
-    if (key.startsWith(CACHE_PREFIX)) keys.push(key);
-  }
-  keys.forEach(k => localStorage.removeItem(k));
-  console.log(`Cache limpo: ${keys.length} entrada(s) removida(s)`);
-}
+// (Caching removido conforme solicitação: uso exclusivo de Supabase)
 
 // ===== DOM ELEMENTS =====
 const uploadZone = document.getElementById('drop-zone');
@@ -93,22 +52,20 @@ const resultsSection = document.getElementById('results-section');
 const rerunBtn1 = document.getElementById('rerun-agent1');
 const rerunBtn2 = document.getElementById('rerun-agent2');
 const rerunBtn3 = document.getElementById('rerun-agent3');
-const cacheSelector = document.getElementById('cache-selector');
-const loadCacheBtn = document.getElementById('load-cache-btn');
 
 // ===== UPLOAD HANDLING =====
 
 // Drag & Drop
-uploadZone.addEventListener('dragover', (e) => {
+uploadZone?.addEventListener('dragover', (e) => {
   e.preventDefault();
   uploadZone.classList.add('dragover');
 });
 
-uploadZone.addEventListener('dragleave', () => {
+uploadZone?.addEventListener('dragleave', () => {
   uploadZone.classList.remove('dragover');
 });
 
-uploadZone.addEventListener('drop', (e) => {
+uploadZone?.addEventListener('drop', (e) => {
   e.preventDefault();
   uploadZone.classList.remove('dragover');
   
@@ -119,29 +76,27 @@ uploadZone.addEventListener('drop', (e) => {
 });
 
 // Click to upload
-uploadZone.addEventListener('click', (e) => {
+uploadZone?.addEventListener('click', (e) => {
   if (e.target.tagName !== 'LABEL' && e.target.tagName !== 'INPUT') {
     fileInput.click();
   }
 });
 
-fileInput.addEventListener('change', (e) => {
+fileInput?.addEventListener('change', (e) => {
   if (e.target.files.length > 0) {
     handleFile(e.target.files[0]);
   }
 });
 
-
-
 // Process button
-processBtn.addEventListener('click', () => {
+processBtn?.addEventListener('click', () => {
   if (!appState.isProcessing && appState.parseResult) {
     runPipeline();
   }
 });
 
 // Reset button
-resetBtn.addEventListener('click', () => {
+resetBtn?.addEventListener('click', () => {
   resetApp();
 });
 
@@ -151,37 +106,6 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
     switchTab(btn.dataset.tab);
   });
 });
-
-// Cache Selector handling
-if (cacheSelector && loadCacheBtn) {
-  cacheSelector.addEventListener('change', (e) => {
-    loadCacheBtn.disabled = !e.target.value;
-  });
-  
-  loadCacheBtn.addEventListener('click', () => {
-    const key = cacheSelector.value;
-    if (!key) return;
-    
-    try {
-      const cache = JSON.parse(localStorage.getItem(key));
-      if (cache) {
-        // Simular um arquivo virtual para satisfazer appState
-        appState.file = { name: cache._filename, size: 0 }; 
-        appState.parseResult = { messages: [], mediaFiles: new Map() }; // mock
-        
-        uploadZone.classList.add('has-file');
-        uploadZone.querySelector('h2').textContent = cache._filename;
-        uploadZone.querySelector('p').innerHTML = `<strong>Cache Restaurado</strong>`;
-        
-        processBtn.disabled = false;
-        restoreFromCache(cache);
-      }
-    } catch(e) {
-      console.error(e);
-      showError("Erro ao carregar cache selecionado");
-    }
-  });
-}
 
 // Re-run buttons
 rerunBtn1?.addEventListener('click', (e) => { e.stopPropagation(); rerunAgent(1); });
@@ -247,16 +171,9 @@ async function handleFile(file) {
     return;
   }
 
-  uploadZone.classList.add('has-file');
-  uploadZone.querySelector('h2').textContent = file.name;
-
-  // Verificar cache
-  const cache = loadCache(file);
-  const hasFullCache = cache && cache.agent1 && cache.agent2 && cache.agent3;
-
-  if (hasFullCache) {
-    uploadZone.querySelector('p').innerHTML = `<strong>${formatSize(file.size)}</strong> — Cache encontrado!`;
-  } else {
+  if (uploadZone) {
+    uploadZone.classList.add('has-file');
+    uploadZone.querySelector('h2').textContent = file.name;
     uploadZone.querySelector('p').innerHTML = `<strong>${formatSize(file.size)}</strong> — Pronto para processar`;
   }
 
@@ -272,12 +189,9 @@ async function handleFile(file) {
     appState.parseResult = result;
 
     renderUploadSummary(result);
-    processBtn.disabled = false;
-    processBtn.classList.add('pulse-ready');
-
-    // Se tem cache completo, restaurar resultados automaticamente
-    if (hasFullCache) {
-      restoreFromCache(cache);
+    if (processBtn) {
+      processBtn.disabled = false;
+      processBtn.classList.add('pulse-ready');
     }
 
   } catch (error) {
@@ -286,46 +200,18 @@ async function handleFile(file) {
   }
 }
 
-function restoreFromCache(cache) {
-  console.log('Restaurando resultados do cache...');
-  resultsSection.style.display = 'block';
-  resetBtn.style.display = 'inline-flex';
-
-  // Agente 1
-  appState.agent1Output = cache.agent1;
-  updateAgentStatus(1, 'done', `${cache.agent1.length} transcrição(ões) [cache]`);
-  updateAgentProgress(1, cache.agent1.length, cache.agent1.length);
-  renderAgent1Results(cache.agent1);
-  if (rerunBtn1) rerunBtn1.style.display = 'block';
-
-  // Agente 2
-  appState.agent2Output = cache.agent2;
-  updateAgentStatus(2, 'done', `${cache.agent2.length} mensagens unificadas [cache]`);
-  updateAgentProgress(2, cache.agent2.length, cache.agent2.length);
-  renderAgent2Results(cache.agent2, appState.parseResult ? appState.parseResult.mediaFiles : new Map());
-  if (rerunBtn2) rerunBtn2.style.display = 'block';
-
-  // Agente 3
-  appState.agent3Output = cache.agent3;
-  const stats = cache.agent3.stats;
-  updateAgentStatus(3, 'done', `${stats.totalPerguntas} P&R extraída(s) [cache]`);
-  renderAgent3Results(cache.agent3, appState.parseResult ? appState.parseResult.mediaFiles : new Map(), appState.mentoriaType);
-  if (rerunBtn3) rerunBtn3.style.display = 'block';
-
-  processBtn.innerHTML = '<span class="btn-icon-left">✅</span> Pipeline Concluída [Cache]';
-  switchTab('tab-agent3');
-}
-
 // ===== PIPELINE ORCHESTRATION =====
 
 async function runPipeline() {
   if (appState.isProcessing || !appState.parseResult) return;
   
   appState.isProcessing = true;
-  processBtn.disabled = true;
-  processBtn.innerHTML = '<span class="btn-icon-left">⏳</span> Processando...';
-  resultsSection.style.display = 'block';
-  resetBtn.style.display = 'inline-flex';
+  if (processBtn) {
+    processBtn.disabled = true;
+    processBtn.innerHTML = '<span class="btn-icon-left">⏳</span> Processando...';
+  }
+  if (resultsSection) resultsSection.style.display = 'block';
+  if (resetBtn) resetBtn.style.display = 'inline-flex';
 
   // Capturar mentoria selecionada no momento do início
   const selectedMentoria = document.querySelector('input[name="mentoria"]:checked')?.value || 'cleiton';
@@ -333,91 +219,59 @@ async function runPipeline() {
 
   const { messages, mediaFiles } = appState.parseResult;
 
-  // Verificar cache parcial (especialmente Agente 1 que é o mais demorado)
-  const cache = loadCache(appState.file);
-
   try {
     // ============================
     // 🟦 AGENTE 1: Transcribitor
     // ============================
-    if (cache && cache.agent1 && cache.agent1.length > 0) {
-      // Usar cache do Agente 1
-      appState.agent1Output = cache.agent1;
-      updateAgentStatus(1, 'done', `${cache.agent1.length} transcrição(ões) [cache]`);
-      updateAgentProgress(1, cache.agent1.length, cache.agent1.length);
-      renderAgent1Results(cache.agent1);
-      console.log('Agente 1: usando cache, pulando transcrição');
-    } else {
-      updateAgentStatus(1, 'running', 'Transcrevendo áudios...');
+    updateAgentStatus(1, 'running', 'Transcrevendo áudios...');
 
-      try {
-        appState.agent1Output = await executeAgent1(
-          messages,
-          mediaFiles,
-          (current, total, filename) => {
-            updateAgentProgress(1, current, total);
-            updateAgentStatus(1, 'running', `Transcrevendo: ${filename || '...'}`);
-          }
-        );
-
-        updateAgentStatus(1, 'done', `${appState.agent1Output.length} transcrição(ões)`);
-        renderAgent1Results(appState.agent1Output);
-        saveCache(appState.file, 'agent1', appState.agent1Output);
-      } catch (error) {
-        console.error('Erro no Agente 1:', error);
-        updateAgentStatus(1, 'error', `Erro: ${error.message}`);
-        appState.agent1Output = [];
+    appState.agent1Output = await executeAgent1(
+      messages,
+      mediaFiles,
+      (current, total, filename) => {
+        updateAgentProgress(1, current, total);
+        updateAgentStatus(1, 'running', `Transcrevendo: ${filename || '...'}`);
       }
-    }
+    );
+
+    updateAgentStatus(1, 'done', `${appState.agent1Output.length} transcrição(ões)`);
+    renderAgent1Results(appState.agent1Output);
 
     // ============================
     // 🟨 AGENTE 2: Reconstrutor
     // ============================
     updateAgentStatus(2, 'running', 'Reconstruindo conversa...');
     
-    try {
-      appState.agent2Output = executeAgent2(
-        messages,
-        appState.agent1Output || [],
-        mediaFiles,
-        (current, total) => {
-          updateAgentProgress(2, current, total);
-        }
-      );
-      
-      updateAgentStatus(2, 'done', `${appState.agent2Output.length} mensagens unificadas`);
-      renderAgent2Results(appState.agent2Output, mediaFiles);
-      saveCache(appState.file, 'agent2', appState.agent2Output);
-    } catch (error) {
-      console.error('Erro no Agente 2:', error);
-      updateAgentStatus(2, 'error', `Erro: ${error.message}`);
-      appState.agent2Output = [];
-    }
+    appState.agent2Output = executeAgent2(
+      messages,
+      appState.agent1Output || [],
+      mediaFiles,
+      (current, total) => {
+        updateAgentProgress(2, current, total);
+      }
+    );
+    
+    updateAgentStatus(2, 'done', `${appState.agent2Output.length} mensagens unificadas`);
+    renderAgent2Results(appState.agent2Output, mediaFiles);
 
     // ============================
     // 🟩 AGENTE 3: Analista
     // ============================
     updateAgentStatus(3, 'running', 'Extraindo perguntas e respostas...');
     
-    try {
-      appState.agent3Output = executeAgent3(
-        appState.agent2Output || [],
-        (current, total) => {
-          updateAgentProgress(3, current, total);
-        }
-      );
-      
-      const stats = appState.agent3Output.stats;
-      updateAgentStatus(3, 'done', `${stats.totalPerguntas} P&R extraída(s)`);
-      renderAgent3Results(appState.agent3Output, mediaFiles, appState.mentoriaType);
-      saveCache(appState.file, 'agent3', appState.agent3Output);
-    } catch (error) {
-      console.error('Erro no Agente 3:', error);
-      updateAgentStatus(3, 'error', `Erro: ${error.message}`);
-    }
+    appState.agent3Output = executeAgent3(
+      appState.agent2Output || [],
+      (current, total) => {
+        updateAgentProgress(3, current, total);
+      }
+    );
+    
+    const stats = appState.agent3Output.stats;
+    updateAgentStatus(3, 'done', `${stats.totalPerguntas} P&R extraída(s)`);
+    renderAgent3Results(appState.agent3Output, mediaFiles, appState.mentoriaType);
 
     // Pipeline concluída
-    processBtn.innerHTML = '<span class="btn-icon-left">✅</span> Pipeline Concluída';
+    if (processBtn) processBtn.innerHTML = '<span class="btn-icon-left">✅</span> Pipeline Concluída';
     
     // Salvar no histórico
     const nichoInput = document.getElementById('nicho-input');
@@ -463,12 +317,12 @@ async function rerunAgent(agentNumber) {
   }
 
   appState.isProcessing = true;
-  processBtn.disabled = true;
-  processBtn.innerHTML = '<span class="btn-icon-left">⏳</span> Processando...';
+  if (processBtn) {
+    processBtn.disabled = true;
+    processBtn.innerHTML = '<span class="btn-icon-left">⏳</span> Processando...';
+  }
   
   const { messages, mediaFiles } = appState.parseResult;
-  let cache = loadCache(appState.file) || {};
-  const cacheKey = getCacheKey(appState.file);
 
   try {
     // Agent 1
@@ -482,7 +336,6 @@ async function rerunAgent(agentNumber) {
       });
       updateAgentStatus(1, 'done', `${appState.agent1Output.length} transcrição(ões)`);
       renderAgent1Results(appState.agent1Output);
-      saveCache(appState.file, 'agent1', appState.agent1Output);
       if (rerunBtn1) rerunBtn1.style.display = 'block';
     }
 
@@ -494,7 +347,6 @@ async function rerunAgent(agentNumber) {
       appState.agent2Output = executeAgent2(messages, appState.agent1Output || [], mediaFiles, (current, total) => updateAgentProgress(2, current, total));
       updateAgentStatus(2, 'done', `${appState.agent2Output.length} mensagens unificadas`);
       renderAgent2Results(appState.agent2Output, mediaFiles);
-      saveCache(appState.file, 'agent2', appState.agent2Output);
       if (rerunBtn2) rerunBtn2.style.display = 'block';
     }
 
@@ -507,12 +359,13 @@ async function rerunAgent(agentNumber) {
       const stats = appState.agent3Output.stats;
       updateAgentStatus(3, 'done', `${stats.totalPerguntas} P&R extraída(s)`);
       renderAgent3Results(appState.agent3Output, mediaFiles, appState.mentoriaType);
-      saveCache(appState.file, 'agent3', appState.agent3Output);
       if (rerunBtn3) rerunBtn3.style.display = 'block';
     }
 
-    processBtn.innerHTML = '<span class="btn-icon-left">✅</span> Refeito com Sucesso';
-    setTimeout(() => { processBtn.innerHTML = '<span class="btn-icon-left">✅</span> Pipeline Concluída'; }, 3000);
+    if (processBtn) {
+      processBtn.innerHTML = '<span class="btn-icon-left">✅</span> Refeito com Sucesso';
+      setTimeout(() => { processBtn.innerHTML = '<span class="btn-icon-left">✅</span> Pipeline Concluída'; }, 3000);
+    }
   } catch (error) {
     console.error('Erro ao refazer agente:', error);
     showError(`Erro: ${error.message}`);
@@ -530,19 +383,24 @@ function resetApp() {
     agent1Output: null,
     agent2Output: null,
     agent3Output: null,
-    isProcessing: false
+    isProcessing: false,
+    mentoriaType: document.querySelector('input[name="mentoria"]:checked')?.value || 'cleiton'
   };
 
   // Reset upload
-  uploadZone.classList.remove('has-file');
-  uploadZone.querySelector('h2').textContent = 'Arraste seu arquivo aqui';
-  uploadZone.querySelector('p').innerHTML = 'Arquivo <strong>.zip</strong> exportado do WhatsApp (com mídia) ou <strong>.txt</strong>';
-  fileInput.value = '';
+  if (uploadZone) {
+    uploadZone.classList.remove('has-file');
+    uploadZone.querySelector('h2').textContent = 'Arraste seu arquivo aqui';
+    uploadZone.querySelector('p').innerHTML = 'Arquivo <strong>.zip</strong> exportado do WhatsApp (com mídia) ou <strong>.txt</strong>';
+  }
+  if (fileInput) fileInput.value = '';
 
   // Reset summary
   const summary = document.getElementById('upload-summary');
-  summary.classList.remove('visible');
-  summary.innerHTML = '';
+  if (summary) {
+    summary.classList.remove('visible');
+    summary.innerHTML = '';
+  }
 
   // Reset agents
   for (let i = 1; i <= 3; i++) {
@@ -551,15 +409,17 @@ function resetApp() {
   }
 
   // Reset buttons
-  processBtn.disabled = true;
-  processBtn.innerHTML = '<span class="btn-icon-left">▶</span> Iniciar Pipeline';
-  resetBtn.style.display = 'none';
+  if (processBtn) {
+    processBtn.disabled = true;
+    processBtn.innerHTML = '<span class="btn-icon-left">▶</span> Iniciar Pipeline';
+  }
+  if (resetBtn) resetBtn.style.display = 'none';
   if (rerunBtn1) rerunBtn1.style.display = 'none';
   if (rerunBtn2) rerunBtn2.style.display = 'none';
   if (rerunBtn3) rerunBtn3.style.display = 'none';
 
   // Hide results
-  resultsSection.style.display = 'none';
+  if (resultsSection) resultsSection.style.display = 'none';
 
   // Reset tab contents
   document.querySelectorAll('.results-content').forEach(el => {
@@ -584,7 +444,6 @@ function formatSize(bytes) {
 }
 
 function showError(message) {
-  // Simple alert for now, could be enhanced with a toast system
   const errDiv = document.createElement('div');
   errDiv.style.cssText = `
     position: fixed;
@@ -616,7 +475,8 @@ function showError(message) {
 async function refreshHistoryDashboard() {
   const selectedMentoria = document.querySelector('input[name="mentoria"]:checked')?.value || 'cleiton';
   const stats = await getHistoryStats(selectedMentoria);
-  renderHistoryDashboard(stats, selectedMentoria);
+  const detailedStats = await getDetailedAnalytics(selectedMentoria);
+  renderHistoryDashboard(stats, detailedStats, selectedMentoria);
 }
 
 // Clear history button
@@ -643,42 +503,5 @@ document.querySelectorAll('input[name="mentoria"]').forEach(input => {
   });
 });
 
-// ===== INIT =====
-
-function populateCacheSelector() {
-  if (!cacheSelector) return;
-  
-  const caches = [];
-  for (let i = 0; i < localStorage.length; i++) {
-    const key = localStorage.key(i);
-    if (key.startsWith(CACHE_PREFIX) && key !== 'whatsfast_history') {
-      try {
-        const data = JSON.parse(localStorage.getItem(key));
-        if (data._filename && data._timestamp) {
-          caches.push({ key, filename: data._filename, timestamp: data._timestamp });
-        }
-      } catch(e) {}
-    }
-  }
-  
-  caches.sort((a,b) => b.timestamp - a.timestamp);
-  
-  while (cacheSelector.options.length > 1) {
-    cacheSelector.remove(1);
-  }
-  
-  caches.forEach(c => {
-    const date = new Date(c.timestamp);
-    const dateStr = date.toLocaleDateString('pt-BR');
-    const timeStr = date.toLocaleTimeString('pt-BR');
-    
-    const option = document.createElement('option');
-    option.value = c.key;
-    option.textContent = `Cache encontrado para: ${c.filename} (salvo em ${dateStr}, ${timeStr})`;
-    cacheSelector.appendChild(option);
-  });
-}
-
 // Renderizar dashboard histórico na inicialização (Supabase)
 refreshHistoryDashboard().catch(console.error);
-populateCacheSelector();

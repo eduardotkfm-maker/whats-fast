@@ -536,6 +536,19 @@ body::before {
   color: var(--text-tertiary);
 }
 
+.form-select {
+  flex: 1;
+  padding: 0.75rem;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-subtle);
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
 /* === HISTORY SECTION === */
 .history-section {
   margin-bottom: var(--space-2xl);
@@ -667,13 +680,94 @@ body::before {
 }
 
 .history-month-label {
-  font-size: 0.7rem;
+  font-size: 0.75rem;
   color: var(--text-tertiary);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  margin-top: var(--space-xs);
 }
 
+/* === INSIGHTS ESTRATÉGICOS === */
+.history-insights-section {
+  background: rgba(255, 255, 255, 0.03);
+  padding: var(--space-xl);
+  border-radius: var(--radius-lg);
+  margin-bottom: var(--space-2xl);
+  border: 1px solid var(--border-subtle);
+}
+
+.insights-container {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-lg);
+}
+
+.insight-nicho-card {
+  background: var(--bg-card);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-subtle);
+  overflow: hidden;
+}
+
+.insight-nicho-header {
+  padding: var(--space-md) var(--space-lg);
+  background: rgba(37, 211, 102, 0.05);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.insight-nicho-header h4 {
+  margin: 0;
+  color: var(--wa-green);
+  font-size: 1.1rem;
+}
+
+.insight-months-list {
+  padding: var(--space-md);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}
+
+.insight-month-row {
+  padding: var(--space-md);
+  background: var(--bg-elevated);
+  border-radius: var(--radius-sm);
+  border-left: 4px solid var(--wa-green);
+}
+
+.insight-month-info {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 0.8rem;
+  font-weight: 600;
+}
+
+.month-label {
+  color: var(--text-primary);
+}
+
+.month-count {
+  font-size: 0.85rem;
+  color: var(--wa-green);
+}
+
+.insight-categories {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.insight-cat-tag {
+  font-size: 0.75rem;
+  padding: 4px 10px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 20px;
+  border: 1px solid var(--border-subtle);
+  color: var(--text-secondary);
+}
+
+.insight-cat-tag strong {
+  color: var(--cat-color, var(--text-primary));
+}
+
+/* === HISTORY LIST === */
 /* Empty History State */
 .history-empty {
   text-align: center;

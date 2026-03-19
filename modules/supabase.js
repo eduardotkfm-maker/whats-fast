@@ -5,7 +5,8 @@ const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
 if (!supabaseUrl || !supabaseAnonKey) {
-  console.warn('⚠️ Supabase URL ou Anon Key não configurados no .env (VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY)');
+  console.error('❌ CRÍTICO: Supabase URL ou Anon Key NÃO configurados no .env');
+  console.info('Certifique-se de que VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY estão definidos no arquivo .env');
 }
 
 export const supabase = createClient(supabaseUrl || '', supabaseAnonKey || '');

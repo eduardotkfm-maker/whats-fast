@@ -18,5 +18,7 @@ Este arquivo contém todas as mudanças solicitadas pelo usuário ao assistente.
 - [x] Migrar endpoint de transcrição (Whisper) do `server.js` (Express) para Deno no Supabase.
 - [x] Remover servidor Node.js e tornar a aplicação 100% serverless/frontend.
 
-### [2026-03-18] Refatoração da UI (Seletor de Histórico)
-- [/] Criar seletor (dropdown) para carregar análises direto do cache ou Supabase sem precisar re-upar o ZIP.
+- [x] Unificar busca e seleção em um único componente premium (Searchable Dropdown), remover placeholder desnecessário e garantir legibilidade (preto).
+- [x] Implementar indicadores avançados no histórico: separação por mês, tipo de dúvida e nicho (Insights Estratégicos).
+- [x] Garantir suporte total e independente para "Mentoria Cleiton" e "Mentoria Julia" no histórico e no seletor de cache (migrado para Supabase).
+- [x] Remover completamente o salvamento em cache local (`localStorage`) e o seletor unificado, utilizando agora exclusivamente o Supabase para o histórico.

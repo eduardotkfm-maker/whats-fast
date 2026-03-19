@@ -564,9 +564,10 @@ function renderAgent3Dashboard(categorias, mentoriaType = 'cleiton') {
 /**
  * Renderiza o Dashboard Histórico de Análises
  * @param {Object} stats - Estatísticas do getHistoryStats()
+ * @param {Object} detailedStats - Insights do getDetailedAnalytics()
  * @param {string} mentoriaLabel - Label da mentoria ativa
  */
-export function renderHistoryDashboard(stats, mentoriaLabel = 'Todas') {
+export function renderHistoryDashboard(stats, detailedStats = {}, mentoriaLabel = 'Todas') {
   const container = document.getElementById('history-dashboard');
   if (!container) return;
 
@@ -649,6 +650,60 @@ export function renderHistoryDashboard(stats, mentoriaLabel = 'Todas') {
           <div class="history-month-label">${mesLabel}/${ano}</div>
         </div>
       `;
+    }
+
+    html += '</div></div>';
+  }
+
+  // === Insights Detalhados (Nicho -> Mês -> Categorias) ===
+  const nichoDetails = Object.entries(detailedStats).sort();
+  if (nichoDetails.length > 0) {
+    html += `
+      <div class="history-insights-section">
+        <h3>💡 Insights Estratégicos</h3>
+        <p style="font-size: 0.8rem; color: var(--text-tertiary); margin-bottom: 1rem;">Tendências de dúvidas por nicho e período.</p>
+        <div class="insights-container">
+    `;
+
+    for (const [nicho, meses] of nichoDetails) {
+      html += `
+        <div class="insight-nicho-card">
+          <div class="insight-nicho-header">
+            <h4>${escapeHtml(nicho)}</h4>
+          </div>
+          <div class="insight-months-list">
+      `;
+
+      const sortedMonths = Object.entries(meses).sort((a, b) => {
+        const [ma, ya] = a[0].split('/');
+        const [mb, yb] = b[0].split('/');
+        return (yb + mb).localeCompare(ya + ma);
+      });
+
+      for (const [mesAno, data] of sortedMonths) {
+        html += `
+          <div class="insight-month-row">
+            <div class="insight-month-info">
+              <span class="month-label">${mesAno}</span>
+              <span class="month-count">${data.total} dúvida${data.total !== 1 ? 's' : ''}</span>
+            </div>
+            <div class="insight-categories">
+        `;
+
+        const sortedCats = Object.entries(data.categorias).sort((a, b) => b[1] - a[1]);
+        for (const [cat, count] of sortedCats) {
+          const color = CATEGORY_COLORS[cat] || '#94a3b8';
+          html += `
+            <span class="insight-cat-tag" style="--cat-color: ${color}">
+              ${cat}: <strong>${count}</strong>
+            </span>
+          `;
+        }
+
+        html += `</div></div>`;
+      }
+
+      html += `</div></div>`;
     }
 
     html += '</div></div>';
