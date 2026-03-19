@@ -16,8 +16,7 @@
  * - Deve garantir estrutura consistente
  */
 
-import { supabase } from './supabase.js';
-
+// O Supabase não é mais usado aqui, a transcrição vai para a /api/transcribe (Vercel)
 /**
  * Transcreve um arquivo de áudio via Supabase Edge Function (que proxeia para Whisper API)
  * @param {Blob} audioBlob - Arquivo de áudio
@@ -44,20 +43,20 @@ async function transcribeAudio(audioBlob, filename) {
     
     formData.append('file', file);
 
-    const { data, error } = await supabase.functions.invoke('transcribe', {
+    // Enviar para a Vercel Serverless Function em vez da Supabase Edge Function
+    const response = await fetch('/api/transcribe', {
+      method: 'POST',
       body: formData,
     });
 
-    if (error) {
-      console.warn("Edge Function falhou ou não configurada:", error.message);
-      return '🎧 Áudio (transcrição indisponível sem OpenAI Key)';
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      const errorMsg = errorData.error || response.statusText;
+      console.warn("API de transcrição falhou:", errorMsg);
+      return '🎧 Áudio (transcrição indisponível - configure OPENAI_API_KEY na Vercel)';
     }
 
-    if (data && data.error) {
-      console.warn("Whisper erro:", data.error);
-      return '🎧 Áudio (transcrição indisponível)';
-    }
-
+    const data = await response.json();
     return data.transcription ? data.transcription.trim() : '🎧 Áudio (vazio)';
   } catch (error) {
     console.error(`Erro ao transcrever ${filename}:`, error);
