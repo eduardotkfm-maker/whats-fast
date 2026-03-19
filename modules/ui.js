@@ -416,10 +416,14 @@ export function exportCSV(data, filename) {
 
 /**
  * Exporta dados como documento do Word (DOC) estruturado em Threads
- * @param {Array} qaList - Array de perguntas e respostas
- * @param {string} filename - Nome do arquivo
+ * @param {Object|Array} result - Objeto com {qaList, isConsolidated, filterInfo} ou array simples qaList
+ * @param {string} filename - Nome do arquivo (opcional)
  */
-export function exportWord(qaList, filename) {
+export function exportWord(result, filename = 'relatorio_consolidado') {
+  const qaList = Array.isArray(result) ? result : result.qaList;
+  const isConsolidated = result.isConsolidated || false;
+  const filterInfo = result.filterInfo || '';
+
   if (!qaList || qaList.length === 0) return;
 
   const nichoSelect = document.getElementById('search-nicho');
@@ -429,14 +433,18 @@ export function exportWord(qaList, filename) {
   let currentThread = null;
 
   for (const qa of qaList) {
-    if (currentThread && 
-        currentThread.remetente === qa.remetente && 
-        currentThread.categoria === qa.categoria && 
-        currentThread.data === qa.data_pergunta) {
+    // No modo consolidado, agrupamos também por mentorado
+    const canGroup = currentThread && 
+                     currentThread.categoria === qa.categoria && 
+                     currentThread.data === qa.data_pergunta &&
+                     (!isConsolidated || currentThread.mentorado === qa.mentorado);
+
+    if (canGroup) {
       currentThread.items.push(qa);
     } else {
       if (currentThread) relatorio.push(currentThread);
       currentThread = {
+        mentorado: qa.mentorado || 'Cliente',
         remetente: qa.remetente,
         categoria: qa.categoria,
         data: qa.data_pergunta,
@@ -446,7 +454,7 @@ export function exportWord(qaList, filename) {
   }
   if (currentThread) relatorio.push(currentThread);
 
-  const nomeCliente = relatorio.length > 0 ? relatorio[0].remetente : 'Cliente';
+  const nomeExibicao = (isConsolidated) ? 'RELATÓRIO CONSOLIDADO' : (relatorio.length > 0 ? relatorio[0].remetente : 'Cliente');
 
   let html = `<html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>
   <head><meta charset='utf-8'><title>Relatório</title>
@@ -454,27 +462,31 @@ export function exportWord(qaList, filename) {
     body { font-family: 'Arial', sans-serif; font-size: 11pt; }
     p { margin-bottom: 0px; margin-top: 0px; line-height: 1.5; }
     br { mso-data-placement: same-cell; }
+    .header-box { border: 1px solid #ccc; padding: 10px; margin-bottom: 20px; background: #f9f9f9; }
   </style>
   </head><body>`;
 
-  html += `<p>NOME: ${escapeHtml(nomeCliente)}</p>`;
-  html += `<p>NICHO: ${escapeHtml(nichoName)}</p><br><br>`;
+  html += `<div class="header-box">`;
+  html += `<p><strong>${escapeHtml(nomeExibicao)}</strong></p>`;
+  if (isConsolidated && filterInfo) html += `<p>FILTROS: ${escapeHtml(filterInfo)}</p>`;
+  html += `<p>NICHO: ${escapeHtml(nichoName)}</p>`;
+  html += `<p>DATA EXPORTAÇÃO: ${new Date().toLocaleDateString('pt-BR')}</p>`;
+  html += `</div><br>`;
 
   relatorio.forEach(thread => {
-    html += `<p><strong>${escapeHtml(thread.categoria.toUpperCase())}</strong></p>`;
-    html += `<p>Data: ${escapeHtml(thread.data)}</p>`;
-    
-    thread.items.forEach((item, index) => {
+    const isSpecialistHeader = isConsolidated ? `<p style="color: #666; font-size: 0.9em;"><strong>MENTORADO: ${escapeHtml(thread.mentorado)}</strong></p>` : '';
+    html += isSpecialistHeader;
+
+    thread.items.forEach((item) => {
       const pText = escapeHtml(item.pergunta).replace(/\n/g, '<br>');
       const rText = escapeHtml(item.resposta).replace(/\n/g, '<br>');
+      const dateText = item.data_pergunta || 'Sem data';
 
-      if (index === 0) {
-        html += `<p>PERGUNTA: ${pText}</p>`;
-        html += `<p>RESPOSTA: ${rText}</p>`;
-      } else {
-        html += `<p>(PERGUNTA) CONT.: ${pText}</p>`;
-        html += `<p>(RESPOSTA) CONT.: ${rText}</p>`;
-      }
+      html += `<p><strong>TIPO DE DÚVIDA: ${escapeHtml(thread.categoria.toUpperCase())}</strong></p>`;
+      html += `<p>DATA: ${escapeHtml(dateText)}</p>`;
+      html += `<p>PERGUNTA: ${pText}</p>`;
+      html += `<p>RESPOSTA: ${rText}</p>`;
+      html += `<br>`;
     });
     html += `<br><br>`;
   });
@@ -651,7 +663,7 @@ export function renderHistoryDashboard(stats, detailedStats = {}, mentoriaLabel 
   const container = document.getElementById('history-dashboard');
   if (!container) return;
 
-  if (stats.totalMentorados === 0) {
+  if (!stats || !stats.totalMentorados) {
     container.innerHTML = `
       <div class="history-empty">
         <p>📊 Nenhuma análise registrada ainda.</p>
@@ -661,17 +673,52 @@ export function renderHistoryDashboard(stats, detailedStats = {}, mentoriaLabel 
     return;
   }
 
-  let html = '';
+  // Extrair meses e nichos únicos para os filtros
+  const uniqueMonths = [...new Set(Object.keys(stats.duvidaPorMes))].sort((a,b) => {
+     const [ma, ya] = a.split('/'); const [mb, yb] = b.split('/');
+     return (yb + mb).localeCompare(ya + ma);
+  });
+  const uniqueNiches = [...new Set(Object.keys(stats.duvidaPorNicho))].sort();
+  const uniqueSpecialists = [...new Set(Object.keys(stats.duvidaPorEspecialista || {}))].sort();
 
-  // === Cards de Resumo ===
+  let html = `
+    <div class="history-controls">
+      <div class="filter-group">
+        <label>Período:</label>
+        <select id="filter-month">
+          <option value="all">Todos os Meses</option>
+          ${uniqueMonths.map(m => `<option value="${m}">${m}</option>`).join('')}
+        </select>
+      </div>
+      <div class="filter-group">
+        <label>Nicho:</label>
+        <select id="filter-nicho">
+          <option value="all">Todos os Nichos</option>
+          ${uniqueNiches.map(n => `<option value="${n}">${n}</option>`).join('')}
+        </select>
+      </div>
+      <div class="filter-group">
+        <label>Especialista:</label>
+        <select id="filter-specialist">
+          <option value="all">Todos</option>
+          ${uniqueSpecialists.map(s => `<option value="${s}">${s}</option>`).join('')}
+        </select>
+      </div>
+      <button id="btn-consolidated-export" class="btn-secondary btn-small" style="margin-left: auto;">
+        <span class="btn-icon-left">📄</span> Exportar Consolidado
+      </button>
+    </div>
+  `;
+
+  // === Cards de Resumo principal (que serão atualizados via JS) ===
   html += `
-    <div class="history-stats-grid">
+    <div class="history-stats-grid" id="history-summary-cards">
       <div class="history-stat-card">
-        <div class="history-stat-value">${stats.totalMentorados}</div>
-        <div class="history-stat-label">Mentorados Analisados</div>
+        <div class="history-stat-value" id="stat-total-mentorados">${stats.totalMentorados}</div>
+        <div class="history-stat-label">Mentorados</div>
       </div>
       <div class="history-stat-card">
-        <div class="history-stat-value">${stats.totalDuvidas}</div>
+        <div class="history-stat-value" id="stat-total-duvidas">${stats.totalDuvidas}</div>
         <div class="history-stat-label">Total de Dúvidas</div>
       </div>
     </div>
@@ -798,7 +845,7 @@ export function renderHistoryDashboard(stats, detailedStats = {}, mentoriaLabel 
 
     for (const rec of stats.registros.slice().reverse()) {
       html += `
-        <div class="history-record" data-id="${rec.id}">
+        <div class="history-record" data-id="${rec.id}" data-specialist="${escapeHtml(rec.especialista || 'Não informado')}">
           <span class="history-record-name">${escapeHtml(rec.mentorado)}</span>
           <span class="history-record-nicho">${escapeHtml(rec.nicho)}</span>
           <span class="history-record-date">${rec.dataAnalise}</span>
@@ -825,7 +872,6 @@ export function renderHistoryDashboard(stats, detailedStats = {}, mentoriaLabel 
     });
   });
 }
-
 // ===== IMAGE MODAL HANDLING =====
 document.addEventListener('DOMContentLoaded', () => {
   const imageModal = document.getElementById('image-modal');

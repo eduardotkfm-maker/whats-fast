@@ -47,10 +47,15 @@
 
     <!-- UPLOAD AREA -->
     <section class="upload-section" id="upload-section">
-      <!-- Campo de Nicho -->
-      <div class="nicho-field" id="nicho-field">
-        <label for="nicho-input">Nicho do Mentorado</label>
-        <input type="text" id="nicho-input" placeholder="Ex: Dentista, Esteticista, Médica..." autocomplete="off">
+      <div class="input-row" style="display: flex; gap: 1rem; margin-bottom: 2rem;">
+        <div class="nicho-field" id="nicho-field" style="flex: 1; margin-bottom: 0;">
+          <label for="nicho-input">Nicho do Mentorado</label>
+          <input type="text" id="nicho-input" placeholder="Ex: Dentista, Esteticista..." autocomplete="off">
+        </div>
+        <div class="nicho-field" id="specialist-field" style="flex: 1; margin-bottom: 0;">
+          <label for="specialist-input">Especialista (Mentor)</label>
+          <input type="text" id="specialist-input" placeholder="Ex: Cleiton, Ádila..." autocomplete="off">
+        </div>
       </div>
 
 

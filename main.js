@@ -138,7 +138,14 @@ document.getElementById('export-agent3-csv')?.addEventListener('click', () => {
   if (appState.agent3Output) exportCSV(appState.agent3Output.qaList, 'agent3-perguntas-respostas');
 });
 document.getElementById('export-agent3-docx')?.addEventListener('click', () => {
-  if (appState.agent3Output) exportWord(appState.agent3Output.qaList, 'Relatorio_Mentoria');
+  if (appState.agent3Output) {
+    let filename = 'Relatorio_Mentoria';
+    if (appState.file && appState.file.name) {
+      // Remove a extensão do arquivo e "Conversa do WhatsApp com "
+      filename = appState.file.name.replace(/\.[^/.]+$/, "").replace(/^Conversa do WhatsApp com /i, "");
+    }
+    exportWord(appState.agent3Output.qaList, filename);
+  }
 });
 
 // Botão de Copiar Texto (Agente 3)
@@ -180,19 +187,12 @@ document.getElementById('copy-agent3-txt')?.addEventListener('click', async (e) 
     text += `NICHO: ${nichoName}\n\n\n`;
 
     relatorio.forEach(thread => {
-      text += `${thread.categoria.toUpperCase()}\n`;
-      text += `Data: ${thread.data}\n`;
-      
-      thread.items.forEach((item, index) => {
-        if (index === 0) {
-          text += `PERGUNTA: ${item.pergunta}\n`;
-          text += `RESPOSTA: ${item.resposta}\n`;
-        } else {
-          text += `(PERGUNTA) CONT.: ${item.pergunta}\n`;
-          text += `(RESPOSTA) CONT.: ${item.resposta}\n`;
-        }
+      thread.items.forEach((item) => {
+        text += `TIPO DE DÚVIDA: ${thread.categoria.toUpperCase()}\n`;
+        text += `DATA: ${item.data_pergunta || 'Sem data'}\n`;
+        text += `PERGUNTA: ${item.pergunta}\n`;
+        text += `RESPOSTA: ${item.resposta}\n\n`;
       });
-      text += `\n\n`;
     });
     
     await navigator.clipboard.writeText(text);
@@ -318,14 +318,18 @@ async function runPipeline() {
     // Pipeline concluída
     if (processBtn) processBtn.innerHTML = '<span class="btn-icon-left">✅</span> Pipeline Concluída';
     
-    // Salvar no histórico
+    // Salvar no histórico de forma automática (Supabase)
     const nichoInput = document.getElementById('nicho-input');
+    const specialistInput = document.getElementById('specialist-input');
     const nicho = nichoInput ? nichoInput.value.trim() : '';
+    const especialista = specialistInput ? specialistInput.value.trim() : '';
+
     if (appState.agent3Output) {
       await saveAnalysisToHistory({
         mentoria: appState.mentoriaType,
         filename: appState.file.name,
         nicho,
+        especialista,
         agent3Output: appState.agent3Output
       });
       await refreshHistoryDashboard();
@@ -663,6 +667,145 @@ document.getElementById('history-dashboard')?.addEventListener('delete-record', 
   if (id) {
     await removeFromHistory(id);
     await refreshHistoryDashboard();
+  }
+});
+
+// --- Filtros Interativos do Dashboard ---
+document.getElementById('history-dashboard')?.addEventListener('change', (e) => {
+  const target = e.target;
+  if (target.id === 'filter-month' || target.id === 'filter-nicho' || target.id === 'filter-specialist') {
+    applyHistoryFilters();
+  }
+});
+
+/**
+ * Aplica filtros de Mês e Nicho na visualização atual do Dashboard
+ */
+function applyHistoryFilters() {
+  const month = document.getElementById('filter-month')?.value || 'all';
+  const niche = document.getElementById('filter-nicho')?.value || 'all';
+  const specialist = document.getElementById('filter-specialist')?.value || 'all';
+  
+  const insightCards = document.querySelectorAll('.insight-nicho-card');
+  const recordRows = document.querySelectorAll('.history-record');
+  
+  let visibleDuvidas = 0;
+  let visibleMentorados = new Set();
+
+  // Filtrar Cards de Insight (Nichos)
+  insightCards.forEach(card => {
+    const cardNicho = card.querySelector('h4')?.textContent || '';
+    const isNicheMatch = (niche === 'all' || cardNicho === niche);
+    
+    // Dentro do card, filtrar meses
+    const monthRows = card.querySelectorAll('.insight-month-row');
+    let hasVisibleMonth = false;
+    
+    monthRows.forEach(row => {
+      const rowMonth = row.querySelector('.month-label')?.textContent || '';
+      const isMonthMatch = (month === 'all' || rowMonth === month);
+      
+      if (isNicheMatch && isMonthMatch) {
+         row.style.display = 'flex';
+         hasVisibleMonth = true;
+         // Extrair count
+         const countStr = row.querySelector('.month-count')?.textContent || '0';
+         visibleDuvidas += parseInt(countStr) || 0;
+      } else {
+         row.style.display = 'none';
+      }
+    });
+
+    card.style.display = hasVisibleMonth ? 'block' : 'none';
+  });
+
+  // Filtrar Linhas de Registro Individual
+  recordRows.forEach(row => {
+    const rowNicho = row.querySelector('.history-record-nicho')?.textContent || '';
+    const rowDate = row.querySelector('.history-record-date')?.textContent || ''; // YYYY-MM-DD
+    
+    // Converter YYYY-MM-DD para MM/YYYY
+    const dParts = rowDate.split('-');
+    const rowMonthYear = dParts.length >= 2 ? `${dParts[1]}/${dParts[0]}` : '';
+
+    // Obter especialista do atributo data se disponível (precisaremos adicionar no render)
+    const rowSpecialist = row.dataset.specialist || 'Não informado';
+
+    const isNicheMatch = (niche === 'all' || rowNicho === niche);
+    const isMonthMatch = (month === 'all' || rowMonthYear === month);
+    const isSpecialistMatch = (specialist === 'all' || rowSpecialist === specialist);
+
+    if (isNicheMatch && isMonthMatch && isSpecialistMatch) {
+      row.style.display = 'flex';
+      visibleMentorados.add(row.querySelector('.history-record-name')?.textContent);
+    } else {
+      row.style.display = 'none';
+    }
+  });
+
+  // Atualizar contadores no topo
+  const statMentorados = document.getElementById('stat-total-mentorados');
+  const statDuvidas = document.getElementById('stat-total-duvidas');
+  if (statMentorados) statMentorados.textContent = visibleMentorados.size;
+  if (statDuvidas) statDuvidas.textContent = visibleDuvidas;
+}
+
+// Lógica de Exportação Consolidada (DOCX)
+document.getElementById('history-dashboard')?.addEventListener('click', async (e) => {
+  const btn = e.target.closest('#btn-consolidated-export');
+  if (!btn) return;
+
+  const month = document.getElementById('filter-month')?.value || 'all';
+  const niche = document.getElementById('filter-nicho')?.value || 'all';
+  const specialist = document.getElementById('filter-specialist')?.value || 'all';
+
+  if (month === 'all' && niche === 'all' && specialist === 'all') {
+    alert('Por favor, selecione um Mês, Nicho ou Especialista específico para exportar o consolidado.');
+    return;
+  }
+  
+  const filterInfo = [
+    month !== 'all' ? `Mês: ${month}` : '',
+    niche !== 'all' ? `Nicho: ${niche}` : '',
+    specialist !== 'all' ? `Especialista: ${specialist}` : ''
+  ].filter(Boolean).join(' | ');
+
+  try {
+    btn.disabled = true;
+    btn.innerHTML = '⏳ Gerando...';
+    
+    // Buscar todos os IDs visíveis
+    const visibleRecordIds = Array.from(document.querySelectorAll('.history-record'))
+      .filter(row => row.style.display !== 'none')
+      .map(row => row.dataset.id);
+
+    if (visibleRecordIds.length === 0) {
+      alert('Nenhum registro encontrado para os filtros selecionados.');
+      return;
+    }
+
+    // Coletar detalhes de todos
+    let allQas = [];
+    for (const id of visibleRecordIds) {
+      const details = await getAnalysisDetails(id);
+      allQas.push(...details.qaList.map(qa => ({ ...qa, mentorado: details.analise.mentorado })));
+    }
+
+    // Exportar via Word (reutilizando lógica da UI mas consolidada)
+    const exportData = {
+      qaList: allQas,
+      stats: { totalPerguntas: allQas.length },
+      isConsolidated: true,
+      filterInfo: `Nicho: ${niche} | Período: ${month}`
+    };
+    
+    exportWord(exportData);
+
+  } catch (err) {
+    showError('Erro na exportação consolidada: ' + err.message);
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<span class="btn-icon-left">📄</span> Exportar Consolidado';
   }
 });
 

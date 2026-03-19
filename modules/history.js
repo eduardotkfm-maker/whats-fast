@@ -60,6 +60,7 @@ export async function saveAnalysisToHistory({ mentoria, filename, nicho, agent3O
     mentoria: mentoria || 'cleiton',
     mentorado,
     nicho: (nicho || '').trim() || 'Não informado',
+    especialista: (params.especialista || '').trim() || 'Não informado',
     filename,
     data_analise: new Date().toISOString().split('T')[0],
     total_duvidas: stats.totalPerguntas,
@@ -135,6 +136,7 @@ export async function getHistoryStats(mentoria) {
     for (const [data, count] of Object.entries(record.duvida_por_data || {})) {
       const parts = data.split('/');
       if (parts.length >= 3) {
+        // Formato MM/YYYY para exibição e YYYY-MM para ordenação técnica
         const mesAno = `${parts[1]}/${parts[2]}`;
         duvidaPorMes[mesAno] = (duvidaPorMes[mesAno] || 0) + count;
       }
@@ -142,9 +144,13 @@ export async function getHistoryStats(mentoria) {
   }
   
   const duvidaPorNicho = {};
+  const duvidaPorEspecialista = {};
   for (const record of history) {
     const nicho = record.nicho || 'Não informado';
     duvidaPorNicho[nicho] = (duvidaPorNicho[nicho] || 0) + (record.total_duvidas || 0);
+    
+    const esp = record.especialista || 'Não informado';
+    duvidaPorEspecialista[esp] = (duvidaPorEspecialista[esp] || 0) + (record.total_duvidas || 0);
   }
   
   const categoriasTotais = {};
@@ -168,6 +174,7 @@ export async function getHistoryStats(mentoria) {
     totalDuvidas,
     duvidaPorMes,
     duvidaPorNicho,
+    duvidaPorEspecialista,
     categoriasTotais,
     registros: registrosFormatados
   };
