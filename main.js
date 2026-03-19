@@ -26,6 +26,7 @@ import {
   renderHistoryDashboard,
   exportJSON,
   exportCSV,
+  exportWord,
   switchTab
 } from './modules/ui.js';
 
@@ -131,6 +132,9 @@ document.getElementById('export-agent3-json')?.addEventListener('click', () => {
 document.getElementById('export-agent3-csv')?.addEventListener('click', () => {
   if (appState.agent3Output) exportCSV(appState.agent3Output.qaList, 'agent3-perguntas-respostas');
 });
+document.getElementById('export-agent3-docx')?.addEventListener('click', () => {
+  if (appState.agent3Output) exportWord(appState.agent3Output.qaList, 'Relatorio_Mentoria');
+});
 
 // Botão de Copiar Texto (Agente 3)
 document.getElementById('copy-agent3-txt')?.addEventListener('click', async (e) => {
@@ -141,13 +145,49 @@ document.getElementById('copy-agent3-txt')?.addEventListener('click', async (e) 
   btn.innerHTML = '⏳ Copiando...';
   
   try {
-    let text = '--- PERGUNTAS E RESPOSTAS EXTRAÍDAS ---\n\n';
-    appState.agent3Output.qaList.forEach((qa, idx) => {
-      text += `[#${idx + 1}] ${qa.categoria.toUpperCase()}\n`;
-      text += `Data: ${qa.data_pergunta} ${qa.hora_pergunta} | Cliente: ${qa.remetente}\n`;
-      text += `PERGUNTA: ${qa.pergunta}\n`;
-      text += `RESPOSTA: ${qa.resposta}\n`;
-      text += `---------------------------------------------------\n\n`;
+    const nichoSelect = document.getElementById('search-nicho');
+    const nichoName = nichoSelect && nichoSelect.value ? nichoSelect.options[nichoSelect.selectedIndex].text : 'Não especificado';
+
+    const relatorio = [];
+    let currentThread = null;
+
+    for (const qa of appState.agent3Output.qaList) {
+      if (currentThread && 
+          currentThread.remetente === qa.remetente && 
+          currentThread.categoria === qa.categoria && 
+          currentThread.data === qa.data_pergunta) {
+        currentThread.items.push(qa);
+      } else {
+        if (currentThread) relatorio.push(currentThread);
+        currentThread = {
+          remetente: qa.remetente,
+          categoria: qa.categoria,
+          data: qa.data_pergunta,
+          items: [qa]
+        };
+      }
+    }
+    if (currentThread) relatorio.push(currentThread);
+
+    const nomeCliente = relatorio.length > 0 ? relatorio[0].remetente : 'Cliente';
+
+    let text = \`NOME: \${nomeCliente}\\n\`;
+    text += \`NICHO: \${nichoName}\\n\\n\\n\`;
+
+    relatorio.forEach(thread => {
+      text += \`\${thread.categoria.toUpperCase()}\\n\`;
+      text += \`Data: \${thread.data}\\n\`;
+      
+      thread.items.forEach((item, index) => {
+        if (index === 0) {
+          text += \`PERGUNTA: \${item.pergunta}\\n\`;
+          text += \`RESPOSTA: \${item.resposta}\\n\`;
+        } else {
+          text += \`(PERGUNTA) CONT.: \${item.pergunta}\\n\`;
+          text += \`(RESPOSTA) CONT.: \${item.resposta}\\n\`;
+        }
+      });
+      text += \`\\n\\n\`;
     });
     
     await navigator.clipboard.writeText(text);

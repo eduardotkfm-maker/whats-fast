@@ -414,6 +414,84 @@ export function exportCSV(data, filename) {
 }
 
 /**
+ * Exporta dados como documento do Word (DOC) estruturado em Threads
+ * @param {Array} qaList - Array de perguntas e respostas
+ * @param {string} filename - Nome do arquivo
+ */
+export function exportWord(qaList, filename) {
+  if (!qaList || qaList.length === 0) return;
+
+  const nichoSelect = document.getElementById('search-nicho');
+  const nichoName = nichoSelect && nichoSelect.value ? nichoSelect.options[nichoSelect.selectedIndex].text : 'Não especificado';
+
+  const relatorio = [];
+  let currentThread = null;
+
+  for (const qa of qaList) {
+    if (currentThread && 
+        currentThread.remetente === qa.remetente && 
+        currentThread.categoria === qa.categoria && 
+        currentThread.data === qa.data_pergunta) {
+      currentThread.items.push(qa);
+    } else {
+      if (currentThread) relatorio.push(currentThread);
+      currentThread = {
+        remetente: qa.remetente,
+        categoria: qa.categoria,
+        data: qa.data_pergunta,
+        items: [qa]
+      };
+    }
+  }
+  if (currentThread) relatorio.push(currentThread);
+
+  const nomeCliente = relatorio.length > 0 ? relatorio[0].remetente : 'Cliente';
+
+  let html = `<html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>
+  <head><meta charset='utf-8'><title>Relatório</title>
+  <style>
+    body { font-family: 'Arial', sans-serif; font-size: 11pt; }
+    p { margin-bottom: 0px; margin-top: 0px; line-height: 1.5; }
+    br { mso-data-placement: same-cell; }
+  </style>
+  </head><body>`;
+
+  html += `<p>NOME: ${escapeHtml(nomeCliente)}</p>`;
+  html += `<p>NICHO: ${escapeHtml(nichoName)}</p><br><br>`;
+
+  relatorio.forEach(thread => {
+    html += `<p><strong>${escapeHtml(thread.categoria.toUpperCase())}</strong></p>`;
+    html += `<p>Data: ${escapeHtml(thread.data)}</p>`;
+    
+    thread.items.forEach((item, index) => {
+      const pText = escapeHtml(item.pergunta).replace(/\\n/g, '<br>');
+      const rText = escapeHtml(item.resposta).replace(/\\n/g, '<br>');
+
+      if (index === 0) {
+        html += `<p>PERGUNTA: ${pText}</p>`;
+        html += `<p>RESPOSTA: ${rText}</p>`;
+      } else {
+        html += `<p>(PERGUNTA) CONT.: ${pText}</p>`;
+        html += `<p>(RESPOSTA) CONT.: ${rText}</p>`;
+      }
+    });
+    html += `<br><br>`;
+  });
+
+  html += `</body></html>`;
+
+  const blob = new Blob(['\ufeff', html], { type: 'application/msword' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = \`\${filename}.doc\`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+/**
  * Alterna visibilidade de abas
  * @param {string} tabId - ID da aba a ativar
  */
