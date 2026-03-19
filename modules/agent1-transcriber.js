@@ -49,18 +49,19 @@ async function transcribeAudio(audioBlob, filename) {
     });
 
     if (error) {
-      console.error("Erro chamando Edge Function:", error);
-      return `[ERRO Edge Function: ${error.message}]`;
+      console.warn("Edge Function falhou ou não configurada:", error.message);
+      return '🎧 Áudio (transcrição indisponível sem OpenAI Key)';
     }
 
     if (data && data.error) {
-      return data.transcription || `[ERRO Whisper: ${data.error}]`;
+      console.warn("Whisper erro:", data.error);
+      return '🎧 Áudio (transcrição indisponível)';
     }
 
-    return data.transcription ? data.transcription.trim() : '[ERRO: Retorno Vazio]';
+    return data.transcription ? data.transcription.trim() : '🎧 Áudio (vazio)';
   } catch (error) {
     console.error(`Erro ao transcrever ${filename}:`, error);
-    return '[ERRO: Áudio Inaudível ou Falha na Rede]';
+    return '🎧 Áudio (erro de rede)';
   }
 }
 
