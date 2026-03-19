@@ -101,6 +101,12 @@ processBtn?.addEventListener('click', () => {
   }
 });
 
+// Botões de Refazer (Rerun)
+rerunBtn1?.addEventListener('click', () => rerunAgent(1, { skipCache: true }));
+rerunBtn2?.addEventListener('click', () => rerunAgent(2));
+rerunBtn3?.addEventListener('click', () => rerunAgent(3));
+
+
 // Reset button
 resetBtn?.addEventListener('click', () => {
   resetApp();
@@ -353,7 +359,7 @@ async function runPipeline() {
 
 // ===== RE-RUN AGENTS =====
 
-async function rerunAgent(agentNumber) {
+async function rerunAgent(agentNumber, options = {}) {
   if (appState.isProcessing || !appState.parseResult) return;
   
   if (agentNumber > 1 && (!appState.agent1Output || appState.agent1Output.length === 0)) {
@@ -382,7 +388,7 @@ async function rerunAgent(agentNumber) {
       appState.agent1Output = await executeAgent1(messages, mediaFiles, (current, total, filename) => {
         updateAgentProgress(1, current, total);
         updateAgentStatus(1, 'running', `Transcrevendo: ${filename || '...'}`);
-      });
+      }, options);
       updateAgentStatus(1, 'done', `${appState.agent1Output.length} transcrição(ões)`);
       renderAgent1Results(appState.agent1Output);
       if (rerunBtn1) rerunBtn1.style.display = 'block';
@@ -703,9 +709,11 @@ function applyHistoryFilters() {
     
     monthRows.forEach(row => {
       const rowMonth = row.querySelector('.month-label')?.textContent || '';
+      const rowSpecialist = row.dataset.specialist || 'Não informado';
       const isMonthMatch = (month === 'all' || rowMonth === month);
+      const isSpecialistMatch = (specialist === 'all' || rowSpecialist === specialist);
       
-      if (isNicheMatch && isMonthMatch) {
+      if (isNicheMatch && isMonthMatch && isSpecialistMatch) {
          row.style.display = 'flex';
          hasVisibleMonth = true;
          // Extrair count
@@ -796,7 +804,7 @@ document.getElementById('history-dashboard')?.addEventListener('click', async (e
       qaList: allQas,
       stats: { totalPerguntas: allQas.length },
       isConsolidated: true,
-      filterInfo: `Nicho: ${niche} | Período: ${month}`
+      filterInfo: filterInfo
     };
     
     exportWord(exportData);

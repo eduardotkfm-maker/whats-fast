@@ -16,15 +16,44 @@
  * - Deve garantir estrutura consistente
  */
 
-// O Supabase não é mais usado aqui, a transcrição vai para a /api/transcribe (Vercel)
+import { supabase } from './supabase.js';
+
+/**
+ * Gera um hash SHA-256 de um Blob de áudio para identificação única
+ * @param {Blob} audioBlob 
+ * @returns {Promise<string>}
+ */
+async function getAudioHash(audioBlob) {
+  const arrayBuffer = await audioBlob.arrayBuffer();
+  const hashBuffer = await crypto.subtle.digest('SHA-256', arrayBuffer);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
 /**
  * Transcreve um arquivo de áudio via Supabase Edge Function (que proxeia para Whisper API)
  * @param {Blob} audioBlob - Arquivo de áudio
  * @param {string} filename - Nome do arquivo
  * @returns {string} Texto transcrito ou mensagem de erro
  */
-async function transcribeAudio(audioBlob, filename) {
+async function transcribeAudio(audioBlob, filename, skipCache = false) {
   try {
+    const audioHash = await getAudioHash(audioBlob);
+    
+    // 1. Verificar Cache no Supabase (se não estiver forçando refazer)
+    if (!skipCache) {
+      const { data: cached, error: cacheError } = await supabase
+        .from('transcricoes')
+        .select('transcription')
+        .eq('audio_hash', audioHash)
+        .single();
+      
+      if (cached && cached.transcription) {
+        console.log(`✅ Cache encontrado para ${filename} (hash: ${audioHash.slice(0, 8)}...)`);
+        return cached.transcription;
+      }
+    }
+
     const formData = new FormData();
     
     const extension = filename.split('.').pop().toLowerCase();
@@ -63,7 +92,19 @@ async function transcribeAudio(audioBlob, filename) {
     }
 
     const data = await response.json();
-    return data.transcription ? data.transcription.trim() : '🎧 Áudio (vazio)';
+    const transcriptionText = data.transcription ? data.transcription.trim() : '🎧 Áudio (vazio)';
+
+    // 2. Salvar no Cache do Supabase para o futuro
+    if (transcriptionText && !transcriptionText.startsWith('🎧')) {
+      await supabase
+        .from('transcricoes')
+        .upsert({ 
+          audio_hash: audioHash, 
+          transcription: transcriptionText 
+        });
+    }
+
+    return transcriptionText;
   } catch (error) {
     console.error(`Erro ao transcrever ${filename}:`, error);
     return '🎧 Áudio (erro de rede)';
@@ -145,9 +186,10 @@ function correlateAudioWithMessages(messages, mediaFiles) {
  * @param {Array} messages - Mensagens parseadas pelo parser
  * @param {Map} mediaFiles - Mapa de arquivos de mídia
  * @param {Function} onProgress - Callback de progresso
+ * @param {Object} options - Opções adicionais (ex: skipCache)
  * @returns {Array} Model JSON com transcrições
  */
-export async function executeAgent1(messages, mediaFiles, onProgress = () => {}) {
+export async function executeAgent1(messages, mediaFiles, onProgress = () => {}, options = {}) {
   const audioFiles = [...mediaFiles.entries()]
     .filter(([_, f]) => f.type === 'audio');
 
@@ -171,7 +213,7 @@ export async function executeAgent1(messages, mediaFiles, onProgress = () => {})
     onProgress(i + 1, correlations.length, audioFilename);
 
     // Transcrever áudio (um por um, esperando terminar)
-    const transcricao = await transcribeAudio(audioData.blob, audioFilename);
+    const transcricao = await transcribeAudio(audioData.blob, audioFilename, options.skipCache);
 
     // Obter vizinhança contextual
     const message = messageIndex >= 0 ? messages[messageIndex] : null;

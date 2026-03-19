@@ -222,7 +222,8 @@ export async function getDetailedAnalytics(mentoria) {
         data_pergunta,
         analises (
           nicho,
-          mentoria
+          mentoria,
+          especialista
         )
       `);
 
@@ -241,6 +242,7 @@ export async function getDetailedAnalytics(mentoria) {
     for (const item of filteredData) {
       if (!item.analises) continue;
       const nicho = item.analises.nicho || 'Não informado';
+      const esp = item.analises.especialista || 'Não informado';
       const dataStr = item.data_pergunta || 'sem data';
       
       // Extrair Mês/Ano (esperado DD/MM/YYYY)
@@ -249,10 +251,11 @@ export async function getDetailedAnalytics(mentoria) {
       const cat = item.categoria || 'Dúvidas Gerais';
 
       if (!tree[nicho]) tree[nicho] = {};
-      if (!tree[nicho][mesAno]) tree[nicho][mesAno] = { total: 0, categorias: {} };
+      if (!tree[nicho][mesAno]) tree[nicho][mesAno] = {}; 
+      if (!tree[nicho][mesAno][esp]) tree[nicho][mesAno][esp] = { total: 0, categorias: {} };
       
-      tree[nicho][mesAno].total++;
-      tree[nicho][mesAno].categorias[cat] = (tree[nicho][mesAno].categorias[cat] || 0) + 1;
+      tree[nicho][mesAno][esp].total++;
+      tree[nicho][mesAno][esp].categorias[cat] = (tree[nicho][mesAno][esp].categorias[cat] || 0) + 1;
     }
 
     return tree;

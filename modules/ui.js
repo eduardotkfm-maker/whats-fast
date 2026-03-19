@@ -807,27 +807,29 @@ export function renderHistoryDashboard(stats, detailedStats = {}, mentoriaLabel 
         return (yb + mb).localeCompare(ya + ma);
       });
 
-      for (const [mesAno, data] of sortedMonths) {
-        html += `
-          <div class="insight-month-row">
-            <div class="insight-month-info">
-              <span class="month-label">${mesAno}</span>
-              <span class="month-count">${data.total} dúvida${data.total !== 1 ? 's' : ''}</span>
-            </div>
-            <div class="insight-categories">
-        `;
-
-        const sortedCats = Object.entries(data.categorias).sort((a, b) => b[1] - a[1]);
-        for (const [cat, count] of sortedCats) {
-          const color = CATEGORY_COLORS[cat] || '#94a3b8';
+      for (const [mesAno, specialists] of sortedMonths) {
+        for (const [esp, data] of Object.entries(specialists)) {
           html += `
-            <span class="insight-cat-tag" style="--cat-color: ${color}">
-              ${cat}: <strong>${count}</strong>
-            </span>
+            <div class="insight-month-row" data-specialist="${escapeHtml(esp)}">
+              <div class="insight-month-info">
+                <span class="month-label">${mesAno}</span>
+                <span class="month-count">${data.total} dúvida${data.total !== 1 ? 's' : ''}</span>
+              </div>
+              <div class="insight-categories">
           `;
-        }
 
-        html += `</div></div>`;
+          const sortedCats = Object.entries(data.categorias).sort((a, b) => b[1] - a[1]);
+          for (const [cat, count] of sortedCats) {
+            const color = CATEGORY_COLORS[cat] || '#94a3b8';
+            html += `
+              <span class="insight-cat-tag" style="--cat-color: ${color}">
+                ${cat}: <strong>${count}</strong>
+              </span>
+            `;
+          }
+
+          html += `</div></div>`;
+        }
       }
 
       html += `</div></div>`;
