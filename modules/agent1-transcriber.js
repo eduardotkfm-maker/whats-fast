@@ -57,23 +57,32 @@ async function transcribeAudio(audioBlob, filename, skipCache = false) {
     const formData = new FormData();
     
     const extension = filename.split('.').pop().toLowerCase();
+    
+    // Mapeamento para formatos suportados pelo Whisper: 
+    // ['flac', 'm4a', 'mp3', 'mp4', 'mpeg', 'mpga', 'oga', 'ogg', 'wav', 'webm']
     const mimeTypes = {
-      'opus': 'audio/opus',
       'ogg': 'audio/ogg',
+      'opus': 'audio/ogg', // Whisper aceita opus dentro de ogg
       'mp3': 'audio/mpeg',
       'm4a': 'audio/mp4',
+      'mp4': 'audio/mp4',
       'wav': 'audio/wav',
-      'aac': 'audio/aac',
-      'amr': 'audio/amr'
+      'webm': 'audio/webm',
+      'aac': 'audio/mp4',  // Tentar tratar aac como m4a/mp4
+      'amr': 'audio/wav'   // Fallback perigoso, mas amr não é suportado nativamente
     };
     
-    const mimeType = mimeTypes[extension] || 'audio/ogg';
-    const file = new File([audioBlob], filename, { type: mimeType });
+    const mimeType = mimeTypes[extension] || 'audio/mpeg';
     
-    // A OpenAI prefere extensões válidas (.ogg em vez de .opus)
-    const newName = filename.replace(/\.opus$/i, '.ogg');
+    // A OpenAI exige extensões válidas no nome do arquivo dentro do FormData
+    let newName = filename;
+    if (extension === 'opus') newName = filename.replace(/\.opus$/i, '.ogg');
+    if (extension === 'aac') newName = filename.replace(/\.aac$/i, '.m4a');
+    if (extension === 'amr') newName = filename.replace(/\.amr$/i, '.mp3'); // Apenas para evitar erro de extensão, o conteúdo pode ainda falhar
     
-    formData.append('file', file, newName);
+    const file = new File([audioBlob], newName, { type: mimeType });
+    
+    formData.append('file', file); // remover o terceiro argumento newName se já passamos no File
     formData.append('model', 'whisper-1');
     formData.append('language', 'pt');
     formData.append('response_format', 'text'); // Retorna texto puro

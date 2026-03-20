@@ -246,33 +246,60 @@ export async function executeAgent3(conversation, onProgress = () => {}) {
   if (qaListTemp.length > 0) {
     onProgress(grouped.length * 0.75, grouped.length); 
     try {
-      const payloadQas = qaListTemp.map(qa => ({
-        pergunta: qa.pergunta,
-        resposta: qa.resposta
-      }));
+      const BATCH_SIZE = 20;
+      const totalBatches = Math.ceil(qaListTemp.length / BATCH_SIZE);
+      const allCategories = {};
 
-      const response = await fetch('/api/agent3-categorize', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ qas: payloadQas })
-      });
+      for (let b = 0; b < totalBatches; b++) {
+        const start = b * BATCH_SIZE;
+        const end = Math.min(start + BATCH_SIZE, qaListTemp.length);
+        const batchQas = qaListTemp.slice(start, end);
+        
+        console.log(`Categorizando lote ${b + 1}/${totalBatches} (${batchQas.length} itens)`);
+        
+        const payloadQas = batchQas.map(qa => ({
+          pergunta: qa.pergunta,
+          resposta: qa.resposta
+        }));
 
-      if (!response.ok) {
-        throw new Error(await response.text());
+        const response = await fetch('/api/agent3-categorize', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ qas: payloadQas })
+        });
+
+        if (!response.ok) {
+          throw new Error(await response.text());
+        }
+
+        const { categories } = await response.json();
+        
+        // Mapear os IDs retornados (que no backend começam de 0 para cada lote)
+        // para os índices reais no array global qaListTemp
+        Object.entries(categories).forEach(([batchId, category]) => {
+          const globalIdx = start + parseInt(batchId);
+          if (qaListTemp[globalIdx]) {
+            qaListTemp[globalIdx].categoria = category;
+          }
+        });
+        
+        // Atualizar progresso parcial
+        onProgress(
+          Math.floor((grouped.length * 0.75) + ((grouped.length * 0.25) * ((b + 1) / totalBatches))), 
+          grouped.length
+        );
       }
-
-      const { categories } = await response.json();
-      
-      qaListTemp.forEach((qa, index) => {
-         qa.categoria = categories[index] || 'Dúvidas Gerais';
-      });
       
       // Remover P&R marcadas pela LLM como irrelevantes
       finalQaList = qaListTemp.filter(qa => qa.categoria !== 'Irrelevante');
 
     } catch (err) {
       console.error('Erro ao categorizar com IA:', err);
-      finalQaList.forEach(qa => qa.categoria = 'Dúvidas Gerais');
+      // Fallback para Dúvidas Gerais se houver erro ou timeout mesmo com batch
+      qaListTemp.forEach(qa => {
+        if (qa.categoria === 'Pendente') qa.categoria = 'Dúvidas Gerais';
+      });
+      finalQaList = qaListTemp.filter(qa => qa.categoria !== 'Irrelevante');
     }
   }
 
